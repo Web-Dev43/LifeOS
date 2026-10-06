@@ -13,5 +13,8 @@
       "database_name": "lifeos",
       "database_id": "dd238825-b299-443d-90df-54f943382285"
     }
-  ]
+  ],
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  }
 }
