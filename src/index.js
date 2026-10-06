@@ -27,6 +27,21 @@ function deviceIdFrom(request, body) {
   return String(header || body?.deviceId || "").trim().slice(0, 120);
 }
 
+function smartPriority(title, dueDate) {
+  const text = String(title || "").toLowerCase();
+  const due = new Date(dueDate + "T23:59:59");
+  const now = new Date();
+  const days = Math.ceil((due - now) / 86400000);
+  let score = days < 0 ? 6 : days <= 0 ? 5 : days === 1 ? 4 : days <= 3 ? 3 : days <= 7 ? 1 : 0;
+  const highSignals = ["exam","test","final","quiz","midterm","project","presentation","application","interview","deadline","essay","report","paper","payment","bill","appointment","meeting","due"];
+  const lowSignals = ["optional","extra credit","when you can","someday","practice"];
+  for (const signal of highSignals) if (text.includes(signal)) score += 2;
+  for (const signal of lowSignals) if (text.includes(signal)) score -= 1;
+  if (score >= 6) return "high";
+  if (score >= 3) return "medium";
+  return "low";
+}
+
 function dateInTimeZone(date, timeZone) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,
@@ -206,11 +221,12 @@ export default {
         if (request.method === "GET" && url.pathname === "/api/tasks") {
           const deviceId = String(url.searchParams.get("deviceId") || "").trim();
           const query = deviceId
-            ? "SELECT id, title, due_date, priority, completed, created_at FROM tasks WHERE device_id = ? ORDER BY completed ASC, due_date ASC, id DESC"
-            : "SELECT id, title, due_date, priority, completed, created_at FROM tasks ORDER BY completed ASC, due_date ASC, id DESC";
+            ? "SELECT id, title, due_date, priority, priority_auto, completed, created_at FROM tasks WHERE device_id = ? ORDER BY completed ASC, due_date ASC, id DESC"
+            : "SELECT id, title, due_date, priority, priority_auto, completed, created_at FROM tasks ORDER BY completed ASC, due_date ASC, id DESC";
           const stmt = deviceId ? env.DB.prepare(query).bind(deviceId) : env.DB.prepare(query);
           const { results } = await stmt.all();
-          return jsonCors({ tasks: results });
+          const tasks = (results || []).map(task => task.priority_auto ? { ...task, priority: smartPriority(task.title, task.due_date) } : task);
+          return jsonCors({ tasks });
         }
 
         if (request.method === "POST" && url.pathname === "/api/tasks") {
@@ -223,8 +239,8 @@ export default {
           if (!title || !dueDate || !deviceId) return jsonCors({ error: "Task details are required." }, 400);
 
           const result = await env.DB.prepare(
-            "INSERT INTO tasks (title, due_date, priority, device_id) VALUES (?, ?, ?, ?)"
-          ).bind(title, dueDate, priority, deviceId).run();
+            "INSERT INTO tasks (title, due_date, priority, priority_auto, device_id) VALUES (?, ?, ?, ?, ?)"
+          ).bind(title, dueDate, priority, priorityAuto ? 1 : 0, deviceId).run();
 
           return jsonCors({ id: result.meta.last_row_id }, 201);
         }
@@ -234,8 +250,19 @@ export default {
         if (request.method === "PATCH" && url.pathname.startsWith("/api/tasks/") && Number.isInteger(id)) {
           const body = await request.json();
           const deviceId = deviceIdFrom(request, body);
-          const completed = body.completed ? 1 : 0;
-          await env.DB.prepare("UPDATE tasks SET completed = ? WHERE id = ? AND device_id = ?").bind(completed, id, deviceId).run();
+          const updates = [];
+          const values = [];
+          if (typeof body.completed !== "undefined") { updates.push("completed = ?"); values.push(body.completed ? 1 : 0); }
+          if (body.priorityAuto === true) { updates.push("priority_auto = 1"); }
+          else if (["low","medium","high"].includes(body.priority)) { updates.push("priority = ?, priority_auto = 0"); values.push(body.priority); }
+          if (updates.length) {
+            values.push(id, deviceId);
+            await env.DB.prepare("UPDATE tasks SET " + updates.join(", ") + " WHERE id = ? AND device_id = ?").bind(...values).run();
+          }
+          if (body.priorityAuto === true) {
+            const task = await env.DB.prepare("SELECT title, due_date FROM tasks WHERE id = ? AND device_id = ?").bind(id, deviceId).first();
+            if (task) await env.DB.prepare("UPDATE tasks SET priority = ? WHERE id = ? AND device_id = ?").bind(smartPriority(task.title, task.due_date), id, deviceId).run();
+          }
           return jsonCors({ ok: true });
         }
 
