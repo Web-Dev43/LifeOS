@@ -36,7 +36,17 @@ async function getVapid(env){
  const saved=await env.DB.prepare("SELECT public_key, private_key FROM vapid_keys WHERE id = 1").first();
  return {subject:"mailto:lifeos@example.com",publicKey:saved.public_key,privateKey:saved.private_key};
 }
-async function sendToSubscription(env,row,payload){const v=await getVapid(env);return sendPushNotification({endpoint:row.endpoint,keys:{p256dh:row.p256dh,auth:row.auth},expirationTime:null},payload,v,{ttl:86400,urgency:"normal"})}
+async function sendToSubscription(env,row,payload){
+ const v=await getVapid(env);
+ return sendPushNotification({endpoint:row.endpoint,keys:{p256dh:row.p256dh,auth:row.auth},expirationTime:null},payload,v,{ttl:86400,urgency:"normal"});
+}
+function isDeadPushSubscription(error){
+ const status=Number(error?.status||error?.response?.status||0);
+ return status===404||status===410||/\b(?:404|410)\b/.test(String(error?.message||""));
+}
+async function removePushSubscription(env,endpoint){
+ try{await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint=?").bind(endpoint).run()}catch(error){console.error("Push subscription cleanup failed",error?.message||error)}
+}
 async function runReminderSweep(env){
  const now=new Date(),subs=await env.DB.prepare("SELECT id,device_id,endpoint,p256dh,auth,timezone FROM push_subscriptions").all();
  for(const sub of subs.results||[]){
@@ -52,7 +62,13 @@ async function runReminderSweep(env){
    if(already)continue;
    const title=kind==="overdue"?"You’ve got an overdue task":kind==="due-today"?"Due today":"Due tomorrow";
    const body=kind==="overdue"?task.title+" is overdue. Want to knock it out today?":kind==="due-today"?task.title+" is due today. Start with a small step now.":task.title+" is due tomorrow. A little progress today beats the midnight boss battle.";
-   try{const delivered=await sendToSubscription(env,sub,{title,body,url:"/",tag:"task-"+task.id+"-"+kind});if(delivered!==false)await env.DB.prepare("INSERT OR IGNORE INTO notification_log (subscription_id,task_id,kind,reminder_date) VALUES (?,?,?,?)").bind(sub.id,task.id,kind,localDate).run()}catch(e){console.error("Push send failed",e?.message||e)}
+   try{
+    const delivered=await sendToSubscription(env,sub,{title,body,url:"/?tool=deadline",tag:"task-"+task.id+"-"+kind});
+    if(delivered!==false)await env.DB.prepare("INSERT OR IGNORE INTO notification_log (subscription_id,task_id,kind,reminder_date) VALUES (?,?,?,?)").bind(sub.id,task.id,kind,localDate).run();
+   }catch(e){
+    console.error("Push send failed",e?.message||e);
+    if(isDeadPushSubscription(e))await removePushSubscription(env,sub.endpoint);
+   }
   }
  }
 }
@@ -96,7 +112,23 @@ export default{
     if(request.method==="GET"&&url.pathname==="/api/push/config"){const v=await getVapid(env);return jsonCors({publicKey:v.publicKey})}
     if(request.method==="POST"&&url.pathname==="/api/push/subscribe"){const body=await request.json(),deviceId=deviceIdFrom(request,body),sub=body.subscription||body,endpoint=String(sub?.endpoint||"").trim(),p256dh=String(sub?.keys?.p256dh||"").trim(),auth=String(sub?.keys?.auth||"").trim(),timezone=String(body.timezone||"UTC").trim();if(!deviceId||!endpoint||!p256dh||!auth)return jsonCors({error:"Invalid push subscription."},400);await env.DB.prepare("INSERT INTO push_subscriptions (device_id,endpoint,p256dh,auth,timezone) VALUES (?,?,?,?,?) ON CONFLICT(endpoint) DO UPDATE SET device_id=excluded.device_id,p256dh=excluded.p256dh,auth=excluded.auth,timezone=excluded.timezone,updated_at=CURRENT_TIMESTAMP").bind(deviceId,endpoint,p256dh,auth,timezone).run();return jsonCors({ok:true})}
     if(request.method==="DELETE"&&url.pathname==="/api/push/subscribe"){const body=await request.json();const endpoint=String(body.endpoint||"").trim();if(endpoint)await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint=?").bind(endpoint).run();return jsonCors({ok:true})}
-    if(request.method==="POST"&&url.pathname==="/api/push/test"){const body=await request.json(),deviceId=deviceIdFrom(request,body),{results}=await env.DB.prepare("SELECT id,endpoint,p256dh,auth FROM push_subscriptions WHERE device_id=?").bind(deviceId).all();let delivered=0;for(const sub of results||[])try{const ok=await sendToSubscription(env,sub,{title:"LifeOS is locked in 🔔",body:"Notifications are working. We’ll remind you when it actually matters.",url:"/",tag:"lifeos-test"});if(ok!==false)delivered++}catch(e){console.error("Test push failed",e?.message||e)}return jsonCors({ok:true,delivered})}
+    if(request.method==="POST"&&url.pathname==="/api/push/test"){
+      const body=await request.json(),deviceId=deviceIdFrom(request,body);
+      const {results}=await env.DB.prepare("SELECT id,endpoint,p256dh,auth FROM push_subscriptions WHERE device_id=?").bind(deviceId).all();
+      if(!(results||[]).length)return jsonCors({error:"No active phone subscription."},404);
+      let delivered=0,failed=0;
+      for(const sub of results||[]){
+        try{
+          const ok=await sendToSubscription(env,sub,{title:"LifeOS is locked in 🔔",body:"Notifications are working. We’ll remind you when it actually matters.",url:"/?tool=deadline",tag:"lifeos-test"});
+          if(ok!==false)delivered++;else failed++;
+        }catch(e){
+          failed++;
+          console.error("Test push failed",e?.message||e);
+          if(isDeadPushSubscription(e))await removePushSubscription(env,sub.endpoint);
+        }
+      }
+      return jsonCors({ok:delivered>0,delivered,failed},delivered>0?200:503);
+    }
     if(request.method==="GET"&&url.pathname==="/api/tasks"){const deviceId=String(url.searchParams.get("deviceId")||"").trim(),q=deviceId?"SELECT id,title,due_date,priority,priority_auto,completed,created_at FROM tasks WHERE device_id=? ORDER BY completed ASC,due_date ASC,id DESC":"SELECT id,title,due_date,priority,priority_auto,completed,created_at FROM tasks ORDER BY completed ASC,due_date ASC,id DESC",stmt=deviceId?env.DB.prepare(q).bind(deviceId):env.DB.prepare(q),{results}=await stmt.all();return jsonCors({tasks:(results||[]).map(t=>t.priority_auto?{...t,priority:smartPriority(t.title,t.due_date)}:t)})}
     if(request.method==="GET"&&url.pathname==="/api/plan"){const deviceId=String(url.searchParams.get("deviceId")||"").trim(),timeZone=String(url.searchParams.get("timeZone")||"UTC").trim();if(!deviceId)return jsonCors({error:"Device ID required."},400);const {results}=await env.DB.prepare("SELECT id,title,due_date,priority,priority_auto,completed FROM tasks WHERE device_id=? AND completed=0").bind(deviceId).all();return jsonCors(buildPlan(results||[],timeZone))}
     if(request.method==="POST"&&url.pathname==="/api/tasks"){const body=await request.json(),title=String(body.title||"").trim(),dueDate=String(body.dueDate||"").trim(),deviceId=deviceIdFrom(request,body);if(!title||!dueDate||!deviceId)return jsonCors({error:"Task details are required."},400);const p=smartPriority(title,dueDate);const result=await env.DB.prepare("INSERT INTO tasks (title,due_date,priority,priority_auto,device_id) VALUES (?,?,?,?,?)").bind(title,dueDate,p,1,deviceId).run();return jsonCors({id:result.meta.last_row_id},201)}
