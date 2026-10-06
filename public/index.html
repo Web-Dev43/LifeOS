@@ -64,6 +64,26 @@
   </section>
 </main>
 <script>
+(async function(){
+  try{
+    const version="2026-10-06-2";
+    const key="lifeos_app_version";
+    if(localStorage.getItem(key)!==version){
+      localStorage.setItem(key,version);
+      if("serviceWorker" in navigator){
+        const regs=await navigator.serviceWorker.getRegistrations();
+        for(const reg of regs) await reg.update();
+      }
+      const u=new URL(location.href);
+      u.searchParams.set("v",version);
+      if(!location.search.includes("v="+version)){
+        location.replace(u.href);
+        return;
+      }
+    }
+  }catch(e){console.warn("LifeOS update check failed",e)}
+})();
+script>
 const $=s=>document.querySelector(s), form=$("#form"), list=$("#tasks");
 const today=()=>new Date().toISOString().slice(0,10);
 const getDeviceId=()=>{
