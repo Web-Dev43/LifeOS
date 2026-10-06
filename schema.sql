@@ -36,3 +36,11 @@ CREATE TABLE IF NOT EXISTS notification_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_notification_log_date ON notification_log(reminder_date);
+
+
+CREATE TABLE IF NOT EXISTS vapid_keys (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  public_key TEXT NOT NULL,
+  private_key TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
