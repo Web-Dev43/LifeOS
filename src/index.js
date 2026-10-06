@@ -45,8 +45,14 @@ async function runReminderSweep(env){
   }
  }
 }
-function buildPlan(tasks){
- const now=new Date(),today=new Date();today.setHours(23,59,59,999);
+function buildPlan(tasks,timeZone="UTC"){
+ const now=new Date(), localDate=dateInTimeZone(now,timeZone), localHour=hourInTimeZone(now,timeZone);
+ const parts=new Intl.DateTimeFormat("en-US",{timeZone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}).formatToParts(now);
+ const get=n=>Number(parts.find(p=>p.type===n)?.value||0);
+ let year=get("year"),month=get("month"),day=get("day"),hour=get("hour"),minute=get("minute");
+ let cursorMinutes=hour*60+minute;
+ cursorMinutes=Math.ceil(cursorMinutes/5)*5;
+ const endToday=22*60;
  const open=tasks.filter(t=>!t.completed).map(t=>{
   const due=new Date(t.due_date+"T23:59:59"),days=Math.ceil((due-now)/86400000),priority=t.priority_auto?smartPriority(t.title,t.due_date):t.priority;
   const urgency=days<0?100:days===0?90:days===1?80:days<=3?65:days<=7?40:20;
@@ -55,8 +61,20 @@ function buildPlan(tasks){
   const minutes=priority==="high"?30:priority==="medium"?20:15;
   const reason=days<0?"Overdue":days===0?"Due today":days===1?"Due tomorrow":days<=3?"Due soon":priority==="high"?"Important":"Can wait";
   return {...t,priority,days,minutes,score,reason};
- }).sort((a,b)=>b.score-a.score||a.due_date.localeCompare(b.due_date)).slice(0,5);
- return {items:open,totalMinutes:open.reduce((n,t)=>n+t.minutes,0)};
+ }).sort((a,b)=>b.score-a.score||a.due_date.localeCompare(b.due_date));
+ const items=[];
+ let dayOffset=0;
+ for(const task of open.slice(0,5)){
+  if(dayOffset===0 && cursorMinutes+task.minutes>endToday){dayOffset=1;cursorMinutes=9*60}
+  if(dayOffset===1 && task.days<1) continue;
+  const total=cursorMinutes, hh=Math.floor(total/60), mm=total%60;
+  const date=new Date(Date.UTC(year,month-1,day+dayOffset));
+  const scheduledDate=date.toISOString().slice(0,10);
+  const scheduledTime=String(hh).padStart(2,"0")+":"+String(mm).padStart(2,"0");
+  items.push({...task,scheduledDate,scheduledTime,scheduledLabel:new Intl.DateTimeFormat("en-US",{timeZone:"UTC",month:"short",day:"numeric"}).format(date)});
+  cursorMinutes+=task.minutes+5;
+ }
+ return {items,totalMinutes:items.reduce((n,t)=>n+t.minutes,0),timeZone,localDate,currentTime:now.toISOString()};
 }
 export default{
  async fetch(request,env){
@@ -69,7 +87,7 @@ export default{
     if(request.method==="DELETE"&&url.pathname==="/api/push/subscribe"){const body=await request.json();const endpoint=String(body.endpoint||"").trim();if(endpoint)await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint=?").bind(endpoint).run();return jsonCors({ok:true})}
     if(request.method==="POST"&&url.pathname==="/api/push/test"){const body=await request.json(),deviceId=deviceIdFrom(request,body),{results}=await env.DB.prepare("SELECT id,endpoint,p256dh,auth FROM push_subscriptions WHERE device_id=?").bind(deviceId).all();let delivered=0;for(const sub of results||[])try{const ok=await sendToSubscription(env,sub,{title:"LifeOS is locked in 🔔",body:"Notifications are working. We’ll remind you when it actually matters.",url:"/",tag:"lifeos-test"});if(ok!==false)delivered++}catch(e){console.error("Test push failed",e?.message||e)}return jsonCors({ok:true,delivered})}
     if(request.method==="GET"&&url.pathname==="/api/tasks"){const deviceId=String(url.searchParams.get("deviceId")||"").trim(),q=deviceId?"SELECT id,title,due_date,priority,priority_auto,completed,created_at FROM tasks WHERE device_id=? ORDER BY completed ASC,due_date ASC,id DESC":"SELECT id,title,due_date,priority,priority_auto,completed,created_at FROM tasks ORDER BY completed ASC,due_date ASC,id DESC",stmt=deviceId?env.DB.prepare(q).bind(deviceId):env.DB.prepare(q),{results}=await stmt.all();return jsonCors({tasks:(results||[]).map(t=>t.priority_auto?{...t,priority:smartPriority(t.title,t.due_date)}:t)})}
-    if(request.method==="GET"&&url.pathname==="/api/plan"){const deviceId=String(url.searchParams.get("deviceId")||"").trim();if(!deviceId)return jsonCors({error:"Device ID required."},400);const {results}=await env.DB.prepare("SELECT id,title,due_date,priority,priority_auto,completed FROM tasks WHERE device_id=? AND completed=0").bind(deviceId).all();return jsonCors(buildPlan(results||[]))}
+    if(request.method==="GET"&&url.pathname==="/api/plan"){const deviceId=String(url.searchParams.get("deviceId")||"").trim(),timeZone=String(url.searchParams.get("timeZone")||"UTC").trim();if(!deviceId)return jsonCors({error:"Device ID required."},400);const {results}=await env.DB.prepare("SELECT id,title,due_date,priority,priority_auto,completed FROM tasks WHERE device_id=? AND completed=0").bind(deviceId).all();return jsonCors(buildPlan(results||[],timeZone))}
     if(request.method==="POST"&&url.pathname==="/api/tasks"){const body=await request.json(),title=String(body.title||"").trim(),dueDate=String(body.dueDate||"").trim(),deviceId=deviceIdFrom(request,body);if(!title||!dueDate||!deviceId)return jsonCors({error:"Task details are required."},400);const p=smartPriority(title,dueDate);const result=await env.DB.prepare("INSERT INTO tasks (title,due_date,priority,priority_auto,device_id) VALUES (?,?,?,?,?)").bind(title,dueDate,p,1,deviceId).run();return jsonCors({id:result.meta.last_row_id},201)}
     const id=Number(url.pathname.split("/").pop());
     if(request.method==="PATCH"&&url.pathname.startsWith("/api/tasks/")&&Number.isInteger(id)){const body=await request.json(),deviceId=deviceIdFrom(request,body),updates=[],values=[];if(typeof body.completed!=="undefined"){updates.push("completed=?");values.push(body.completed?1:0)}if(body.priorityAuto===true)updates.push("priority_auto=1");else if(["low","medium","high"].includes(body.priority)){updates.push("priority=?,priority_auto=0");values.push(body.priority)}if(updates.length){values.push(id,deviceId);await env.DB.prepare("UPDATE tasks SET "+updates.join(", ")+" WHERE id=? AND device_id=?").bind(...values).run()}if(body.priorityAuto===true){const task=await env.DB.prepare("SELECT title,due_date FROM tasks WHERE id=? AND device_id=?").bind(id,deviceId).first();if(task)await env.DB.prepare("UPDATE tasks SET priority=? WHERE id=? AND device_id=?").bind(smartPriority(task.title,task.due_date),id,deviceId).run()}return jsonCors({ok:true})}
