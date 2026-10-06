@@ -153,6 +153,23 @@ async function enableNotifications(){
   } catch(e) { console.error(e); status.textContent=e.message || "Couldn’t enable reminders."; status.className="warn"; }
   finally { btn.disabled=false; }
 }
+async function restoreNotificationState(){
+  try{
+    if(!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
+    const standalone=window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true;
+    if(!standalone) return;
+    const reg=await navigator.serviceWorker.register("/sw.js?v=4",{updateViaCache:"none"});
+    await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.getSubscription();
+    if(sub && Notification.permission==="granted"){
+      $("#notifyStatus").textContent="Phone reminders are on 🔔";
+      $("#notifyStatus").className="ok";
+      $("#notifyTitle").textContent="Phone reminders are on 🔔";
+      $("#notifyBtn").textContent="Test";
+      $("#notifyBtn").onclick=testNotification;
+    }
+  }catch(e){ console.warn("Could not restore notification state",e); }
+}
 async function testNotification(){
   const btn=$("#notifyBtn"); btn.disabled=true;
   await fetch("/api/push/test",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId})});
@@ -184,8 +201,8 @@ $("#tasks").addEventListener("change",async e=>{
   const el=e.target.closest('[data-action="priority"]'); if(!el)return;
   await patchTask(el.dataset.id,{priority:el.value==="smart"?null:el.value,priorityAuto:el.value==="smart"});
 });
-if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js?v=3",{updateViaCache:"none"}).catch(console.error);
-load(); loadPlan();
+if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js?v=4",{updateViaCache:"none"}).catch(console.error);
+load(); loadPlan(); restoreNotificationState();
 
 </script>
 </body>
