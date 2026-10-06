@@ -104,38 +104,37 @@ function render(tasks){
 function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 
 async function enableNotifications(){
-  if(!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)){
-    $("#notifyStatus").textContent="This browser does not support LifeOS push yet.";
-    $("#notifyStatus").className="warn"; return;
+  const status=$("#notifyStatus"), btn=$("#notifyBtn");
+  if(!window.isSecureContext){status.textContent="Notifications need a secure connection.";status.className="warn";return}
+  if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window)){
+    status.textContent="Push notifications aren’t available here. Open LifeOS from its Home Screen app.";status.className="warn";return;
   }
-  $("#notifyBtn").disabled=true;
+  btn.disabled=true;
   try{
-    const config=await fetch("/api/push/config").then(r=>r.json());
+    status.textContent="Setting up phone reminders…";status.className="";
+    const configResponse=await fetch("/api/push/config");
+    if(!configResponse.ok)throw new Error("Could not load notification settings.");
+    const config=await configResponse.json();
+    if(!config.publicKey)throw new Error("LifeOS notification key is missing.");
     const registration=await navigator.serviceWorker.register("/sw.js");
-    const permission=await Notification.requestPermission();
+    await navigator.serviceWorker.ready;
+    let permission=Notification.permission;
+    if(permission==="default")permission=await Notification.requestPermission();
     if(permission!=="granted"){
-      $("#notifyStatus").textContent="Notifications are off. You can enable them in your device settings.";
-      $("#notifyStatus").className="warn"; return;
+      status.textContent=permission==="denied"?"Notifications are blocked for LifeOS. Open iPhone Settings → Notifications → LifeOS and allow notifications.":"Notification permission was not granted.";
+      status.className="warn";return;
     }
     const existing=await registration.pushManager.getSubscription();
-    const subscription=existing || await registration.pushManager.subscribe({
-      userVisibleOnly:true,
-      applicationServerKey:base64urlToUint8Array(config.publicKey)
-    });
-    await fetch("/api/push/subscribe",{
-      method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},
-      body:JSON.stringify({deviceId,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,subscription:subscription.toJSON()})
-    });
-    $("#notifyTitle").textContent="Phone reminders are on 🔔";
-    $("#notifyStatus").textContent="LifeOS will nudge you when a task is actually worth your attention.";
-    $("#notifyStatus").className="ok";
-    $("#notifyBtn").textContent="Test";
-    $("#notifyBtn").onclick=testNotification;
+    const subscription=existing||await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64urlToUint8Array(config.publicKey)});
+    const response=await fetch("/api/push/subscribe",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,subscription:subscription.toJSON()})});
+    if(!response.ok)throw new Error((await response.json().catch(()=>({}))).error||"LifeOS couldn’t save this phone.");
+    status.textContent="LifeOS will nudge you when a task is actually worth your attention.";
+    status.className="ok";$("#notifyTitle").textContent="Phone reminders are on 🔔";btn.textContent="Test";btn.onclick=testNotification;
   }catch(error){
-    console.error(error);
-    $("#notifyStatus").textContent="Couldn’t enable notifications yet. Try again after installing LifeOS to your Home Screen.";
-    $("#notifyStatus").className="warn";
-  }finally{$("#notifyBtn").disabled=false}
+    console.error("LifeOS notifications:",error);
+    status.textContent="Couldn’t enable reminders: "+(error?.message||"unknown error");
+    status.className="warn";
+  }finally{btn.disabled=false}
 }
 async function testNotification(){
   $("#notifyBtn").disabled=true;
