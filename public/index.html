@@ -44,14 +44,34 @@
     <h1>LifeOS</h1>
     <p class="landingSlogan">Gets your life together.</p>
     <div class="landingTools">
-      <button class="landingTool" data-home-tool="deadline"><span class="emoji">🗓️</span><b>Deadline</b><span>Knows what you should do next.</span></button>
-      <button class="landingTool" data-home-tool="readeasy"><span class="emoji">📖</span><b>ReadEasy</b><span>Makes confusing stuff make sense.</span></button>
-      <button class="landingTool" data-home-tool="replybot"><span class="emoji">💬</span><b>ReplyBot</b><span>Knows what to say when you don't.</span></button>
-      <button class="landingTool" data-home-tool="declutter"><span class="emoji">🧹</span><b>DigitalDeclutter</b><span>Gets your digital mess under control.</span></button>
+      <button type="button" class="landingTool" data-home-tool="deadline" onclick="openLifeOSTool('deadline')"><span class="emoji">🗓️</span><b>Deadline</b><span>Knows what you should do next.</span></button>
+      <button type="button" class="landingTool" data-home-tool="readeasy" onclick="openLifeOSTool('readeasy')"><span class="emoji">📖</span><b>ReadEasy</b><span>Makes confusing stuff make sense.</span></button>
+      <button type="button" class="landingTool" data-home-tool="replybot" onclick="openLifeOSTool('replybot')"><span class="emoji">💬</span><b>ReplyBot</b><span>Knows what to say when you don't.</span></button>
+      <button type="button" class="landingTool" data-home-tool="declutter" onclick="openLifeOSTool('declutter')"><span class="emoji">🧹</span><b>DigitalDeclutter</b><span>Gets your digital mess under control.</span></button>
     </div>
   </section>
-  <div id="appViews" hidden>
-  <button id="homeButton" class="backHome">← LifeOS home</button>
+  <script>
+window.openLifeOSTool=function(tool){
+  const home=document.getElementById("homeView");
+  const app=document.getElementById("appViews");
+  const views={deadline:"deadlineView",readeasy:"readeasyView",replybot:"replybotView",declutter:"digitalView"};
+  home.hidden=true;
+  app.hidden=false;
+  Object.entries(views).forEach(([name,id])=>{
+    const el=document.getElementById(id);
+    if(el) el.hidden=name!==tool;
+  });
+  document.querySelectorAll("[data-tool]").forEach(b=>b.classList.toggle("active",b.dataset.tool===tool));
+  window.scrollTo(0,0);
+};
+window.openLifeOSHome=function(){
+  document.getElementById("appViews").hidden=true;
+  document.getElementById("homeView").hidden=false;
+  window.scrollTo(0,0);
+};
+</script>
+<div id="appViews" hidden>
+  <button type="button" id="homeButton" class="backHome" onclick="openLifeOSHome()">← LifeOS home</button>
   <nav class="switcher" aria-label="LifeOS tools">
     <button class="tool active" data-tool="deadline">🗓️ Deadline</button>
     <button class="tool" data-tool="readeasy">📖 ReadEasy</button>
@@ -145,7 +165,7 @@
 <script>
 (async function(){
   try{
-    const version="2026-10-06-9";
+    const version="2026-10-06-10";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
