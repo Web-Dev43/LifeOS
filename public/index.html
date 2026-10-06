@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0f">
+  <title>LifeOS • Deadline</title>
+  <style>
+    :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f7f7f8;background:#0b0b0f}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#252530 0,#0b0b0f 42%);padding:24px 16px 48px}
+    main{width:min(720px,100%);margin:auto}.brand{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#9b9ba7;margin-bottom:8px}
+    h1{font-size:42px;line-height:1;margin:0 0 8px}.sub{color:#a9a9b4;margin:0 0 24px}
+    .card{background:#15151c;border:1px solid #292933;border-radius:20px;padding:16px;margin-bottom:16px;box-shadow:0 12px 40px #0005}
+    form{display:grid;gap:10px}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    input,select,button{width:100%;border:1px solid #30303a;border-radius:13px;padding:13px;background:#0f0f15;color:#fff;font:inherit}
+    button{background:#fff;color:#0b0b0f;border:0;font-weight:800;cursor:pointer}.stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+    .stat{flex:1;min-width:100px;background:#15151c;border:1px solid #292933;border-radius:16px;padding:14px}.stat b{display:block;font-size:24px}.stat span{color:#8f8f9c;font-size:12px}
+    .task{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #282831}.task:last-child{border-bottom:0}
+    .check{width:26px;height:26px;padding:0;border:1px solid #555563;border-radius:50%;background:transparent;flex:none}.check.done{background:#fff;color:#000}
+    .info{min-width:0;flex:1}.title{font-weight:750;overflow-wrap:anywhere}.doneText{text-decoration:line-through;color:#777784}
+    .meta{font-size:12px;color:#92929f;margin-top:4px}.high{color:#ff8b8b}.medium{color:#f4ca72}.low{color:#80d8a3}
+    .delete{width:auto;padding:7px 9px;background:transparent;color:#888;border:1px solid #30303a}.empty{text-align:center;color:#8f8f9c;padding:30px 10px}
+    @media(max-width:520px){h1{font-size:36px}.row{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand">LifeOS / Deadline</div>
+  <h1>Get ahead of it.</h1>
+  <p class="sub">Your assignments, without the last-minute boss battle.</p>
+
+  <section class="stats">
+    <div class="stat"><b id="total">0</b><span>Total</span></div>
+    <div class="stat"><b id="open">0</b><span>Open</span></div>
+    <div class="stat"><b id="done">0</b><span>Done</span></div>
+  </section>
+
+  <section class="card">
+    <form id="form">
+      <input id="title" placeholder="Assignment or task..." maxlength="160" required>
+      <div class="row">
+        <input id="date" type="date" required>
+        <select id="priority">
+          <option value="medium">Medium priority</option>
+          <option value="high">High priority</option>
+          <option value="low">Low priority</option>
+        </select>
+      </div>
+      <button>Add task</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <div id="tasks"></div>
+  </section>
+</main>
+<script>
+const $=s=>document.querySelector(s), form=$("#form"), list=$("#tasks");
+const today=()=>new Date().toISOString().slice(0,10);
+$("#date").value=today();
+
+async function load(){
+  const r=await fetch("/api/tasks"), data=await r.json();
+  render(data.tasks||[]);
+}
+function render(tasks){
+  $("#total").textContent=tasks.length;
+  $("#open").textContent=tasks.filter(t=>!t.completed).length;
+  $("#done").textContent=tasks.filter(t=>t.completed).length;
+  if(!tasks.length){list.innerHTML='<div class="empty">No tasks yet. Add your first one 👀</div>';return}
+  list.innerHTML=tasks.map(t=>{
+    const d=new Date(t.due_date+"T23:59:59");
+    const overdue=!t.completed && d<new Date();
+    return `<div class="task">
+      <button class="check ${t.completed?'done':''}" onclick="toggle(${t.id},${!t.completed})">${t.completed?'✓':''}</button>
+      <div class="info">
+        <div class="title ${t.completed?'doneText':''}">${escapeHtml(t.title)}</div>
+        <div class="meta ${t.priority}">${t.priority.toUpperCase()} · Due ${escapeHtml(t.due_date)}${overdue?' · OVERDUE':''}</div>
+      </div>
+      <button class="delete" onclick="removeTask(${t.id})">×</button>
+    </div>`
+  }).join("");
+}
+function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+form.onsubmit=async e=>{
+  e.preventDefault();
+  await fetch("/api/tasks",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:$("#title").value,dueDate:$("#date").value,priority:$("#priority").value})});
+  form.reset(); $("#date").value=today(); $("#priority").value="medium"; await load();
+};
+async function toggle(id,completed){await fetch("/api/tasks/"+id,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({completed})});load()}
+async function removeTask(id){await fetch("/api/tasks/"+id,{method:"DELETE"});load()}
+load();
+</script>
+</body>
+</html>
