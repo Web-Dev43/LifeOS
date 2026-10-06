@@ -117,7 +117,7 @@ window.openLifeOSHome=function(){
   <section id="digitalView" class="toolView" hidden>
     <div class="brand">LifeOS / DigitalDeclutter</div>
     <h1>Clean up the mess.</h1>
-    <p class="sub">Pick some photos or files. LifeOS will sort them into what probably needs attention.</p>
+    <p class="sub">Pick some photos or files. LifeOS will sort them into Delete, Review, and Keep. Delete is reserved for high-confidence junk.</p>
 
     <section class="card">
       <div class="declutterChoices">
@@ -168,7 +168,7 @@ window.openLifeOSHome=function(){
 <script>
 (async function(){
   try{
-    const version="2026-10-06-21";
+    const version="2026-10-06-22";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -231,7 +231,7 @@ function analyzeDeclutter(files){
     const arr=seen.get(key)||[]; arr.push(item); seen.set(key,arr);
   });
 
-  const important=/resume|cv|tax|passport|license|licence|medical|school|assignment|homework|project|contract|receipt|invoice|certificate|important|final|portfolio|application|transcript|insurance|lease|rent|bank|budget/i;
+  const important=/resume|cv|tax|passport|license|licence|medical|school|assignment|homework|project|contract|receipt|invoice|certificate|portfolio|application|transcript|insurance|lease|rent|bank|budget|recovery|password|private.?key|secret/i;
   const memory=/memory|memories|vacation|holiday|trip|travel|birthday|family|friend|friends|wedding|graduation|christmas|thanksgiving|baby|kids|child|dog|cat|pet|beach|sunset|concert|party|celebration|reunion|anniversary|favorite|favourite/i;
   const ai=/\b(ai|a\.i\.)\b|generated|generation|midjourney|dall[- ]?e|stable ?diffusion|flux|comfyui|leonardo|ideogram|firefly|synthetic|prompt/i;
   const code=/\.(js|jsx|ts|tsx|py|java|c|cpp|h|hpp|cs|go|rs|rb|php|swift|kt|kts|sh|bash|zsh|sql|html|css|scss|json|xml|yaml|yml|toml|md|ipynb)$/i;
@@ -241,6 +241,9 @@ function analyzeDeclutter(files){
   const archive=/\.(zip|rar|7z|dmg|pkg|exe|msi)$/i;
   const photo=/\.(jpe?g|png|heic|heif|gif|webp)$/i;
   const video=/\.(mov|mp4|m4v|avi|webm)$/i;
+  const versioned=/(?:^|[ _.-])(v\d+|version[ _.-]?\d+|ver[ _.-]?\d+|copy(?:[ _.-]?\d+)?|\(\d+\)|fix\d*|fixed|final\d*|backup|old|old version|new-repo|repo-files)(?:$|[ _.-])/i;
+  const generatedText=/^tiktok[a-z0-9]{12,}(?: \(\d+\))?\.txt$/i;
+  const projectArchive=/(?:vidverse|cinematiclife|cloudflare|netlify|github|repo|portfolio|website|site|app|project|trace|hoops|court|wildwater)/i;
 
   list.forEach(item=>{
     const name=item.name.toLowerCase();
@@ -259,10 +262,13 @@ function analyzeDeclutter(files){
     const isJunk=junk.test(name);
     const isScreenshot=screenshot.test(name);
     const isArchive=archive.test(name);
+    const isVersioned=versioned.test(name);
+    const isGeneratedText=generatedText.test(name);
+    const isProjectArchive=isArchive&&projectArchive.test(name);
     const huge=item.size>500*1024*1024;
     const large=item.size>100*1024*1024;
 
-    // Only high-confidence junk is eligible for automatic Delete.
+    // DELETE is proof-only: temporary/incomplete files or exact duplicates.
     if(isTemp){
       groups.delete.push({file:item,reason:"Temporary or incomplete file."});
       return;
@@ -272,64 +278,77 @@ function analyzeDeclutter(files){
       return;
     }
 
-    // Personal media needs a different standard: old does NOT mean bad.
     if(isMedia){
       if(isDuplicate&&newest){
         groups.keep.push({file:item,reason:"Newest copy of a duplicate group."});
       }else if(isMemory){
-        groups.keep.push({file:item,reason:"Filename suggests this could be a personal memory, so LifeOS is protecting it."});
+        groups.keep.push({file:item,reason:"Filename suggests a personal memory, so LifeOS is protecting it."});
       }else if(isAI){
-        groups.review.push({file:item,reason:"Looks like an AI-generated image or video. Keep it if you made it intentionally, otherwise review it."});
+        groups.review.push({file:item,reason:"Looks like AI-generated media. Review whether you still want it."});
       }else if(isScreenshot&&ageDays>30){
-        groups.review.push({file:item,reason:"Older screenshot. It may be clutter, but LifeOS won't delete it automatically."});
+        groups.review.push({file:item,reason:"Older screenshot. It may be clutter, but LifeOS will not delete it automatically."});
       }else if(huge&&ageDays>90){
-        groups.review.push({file:item,reason:"Very large photo or video. Review it before deciding."});
-      }else if(isJunk){
-        groups.review.push({file:item,reason:"Generic camera/file name. LifeOS can't tell whether it is a memory, so review it."});
+        groups.review.push({file:item,reason:"Very large media file. Review it before deciding."});
       }else{
-        // A normal photo/video is not automatically a memory and not automatically clutter.
-        groups.review.push({file:item,reason:"Personal media. LifeOS can't safely infer whether this is a memory, so review it."});
+        groups.review.push({file:item,reason:"Personal media. LifeOS cannot safely tell whether it is meaningful or disposable."});
       }
       return;
     }
 
-    // Code and configuration files are valuable but often become old clutter.
+    if(isImportant&&/recovery|password|private.?key|secret|passport|medical|tax|bank/i.test(name)){
+      groups.keep.push({file:item,reason:"Potentially sensitive or important personal data. LifeOS is protecting it."});
+      return;
+    }
+
+    if(isArchive){
+      if(isProjectArchive&&isVersioned){
+        groups.review.push({file:item,reason:"Project archive with a version/fix/copy marker. It may be an older export."});
+      }else if(isProjectArchive){
+        groups.review.push({file:item,reason:"Project archive. LifeOS cannot inspect its contents safely, so review it."});
+      }else if(isVersioned){
+        groups.review.push({file:item,reason:"Versioned or copied archive. It may be an older export."});
+      }else if(isImportant){
+        groups.keep.push({file:item,reason:"Archive with an important-looking filename."});
+      }else{
+        groups.review.push({file:item,reason:"Archive file. LifeOS cannot tell from the filename alone whether you still need it."});
+      }
+      return;
+    }
+
     if(isCode){
       if(isImportant){
-        groups.keep.push({file:item,reason:"Code file with an important-looking name."});
-      }else if(ageDays>365){
-        groups.review.push({file:item,reason:"Old code/config file. It may belong to an old project, so review before keeping or deleting."});
+        groups.keep.push({file:item,reason:"Code/config file with an important-looking project name."});
+      }else if(isVersioned||ageDays>365){
+        groups.review.push({file:item,reason:"Older or versioned code/config file. It may belong to an old project."});
       }else{
-        groups.keep.push({file:item,reason:"Code/config file that may still belong to a current project."});
+        groups.review.push({file:item,reason:"Code/config file. Review whether this project is still active."});
       }
+      return;
+    }
+
+    if(isGeneratedText){
+      groups.review.push({file:item,reason:"Looks like an automatically generated TikTok/download text file. Review whether you still need it."});
       return;
     }
 
     const reasons=[];
     let score=0;
-    if(isImportant){score-=6;reasons.push("important-looking filename");}
+    if(isImportant){score-=8;reasons.push("important-looking filename");}
     if(ageDays<=30){score-=2;reasons.push("recently modified");}
     if(ageDays>730){score+=4;reasons.push("over 2 years old");}
     else if(ageDays>365){score+=2;reasons.push("over a year old");}
     if(isScreenshot&&ageDays>30){score+=3;reasons.push("older screenshot");}
-    if(isJunk){score+=2;reasons.push("generic filename");}
+    if(isJunk){score+=3;reasons.push("generic filename");}
     if(/download|downloads/i.test(name)&&ageDays>60){score+=4;reasons.push("old download");}
-    if(isArchive&&ageDays>180){score+=3;reasons.push("old archive or installer");}
     if(huge&&ageDays>30){score+=4;reasons.push("very large file");}
     else if(large&&ageDays>365){score+=2;reasons.push("large old file");}
+    if(isVersioned){score+=3;reasons.push("version/copy marker");}
 
-    let bucket="keep";
-    let reason="No strong clutter signal. LifeOS is leaving it alone.";
-    if(score>=9){
-      bucket="delete";
-      reason=reasons.slice(0,2).map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join(" · ")+".";
-    }else if(score>=3){
-      bucket="review";
-      reason=reasons.slice(0,2).map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join(" · ")+". Worth a quick look.";
-    }else if(isImportant){
-      reason="Looks important based on the filename, so LifeOS is protecting it.";
+    if(isImportant){
+      groups.keep.push({file:item,reason:"Looks important based on the filename, so LifeOS is protecting it."});
+    }else{
+      groups.review.push({file:item,reason:reasons.length?reasons.slice(0,2).map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join(" · ")+". Review before removing.":"Needs a quick look. LifeOS does not have enough evidence to call it important or disposable."});
     }
-    groups[bucket].push({file:item,reason});
   });
   renderDeclutter(groups);
 }
@@ -337,10 +356,10 @@ function renderDeclutter(groups){
   const all=[...groups.delete,...groups.review,...groups.keep];
   $("#declutterResults").hidden=false;
   $("#declutterTitle").textContent=all.length+" item"+(all.length===1?"":"s")+" checked";
-  $("#declutterSummary").textContent=groups.delete.length+" probably delete · "+groups.review.length+" review · "+groups.keep.length+" keep";
+  $("#declutterSummary").textContent=groups.delete.length+" delete · "+groups.review.length+" review · "+groups.keep.length+" keep";
   const section=(title,cls,items,icon)=>'<div class="declutterGroup"><div class="declutterHead"><h3>'+icon+" "+title+'</h3><span>'+items.length+'</span></div>'+
     (items.length?items.map(x=>'<div class="declutterItem"><div class="fileIcon">'+(String(x.file.type||"").startsWith("image/")?"🖼️":"📄")+'</div><div class="fileInfo"><div class="fileName">'+escapeHtml(x.file.name)+'</div><div class="fileReason '+cls+'">'+escapeHtml(x.reason)+" · "+formatBytes(x.file.size)+'</div></div></div>').join(""):'<div class="meta" style="padding-top:10px">Nothing here. Nice.</div>')+'</div>';
-  $("#declutterGroups").innerHTML=section("Probably delete","deleteBadge",groups.delete,"🗑️")+section("Review","reviewBadge",groups.review,"🟡")+section("Keep","keepBadge",groups.keep,"⭐");
+  $("#declutterGroups").innerHTML=section("Delete","deleteBadge",groups.delete,"🗑️")+section("Review","reviewBadge",groups.review,"🟡")+section("Keep","keepBadge",groups.keep,"⭐");
 }
 $("#photoPicker").addEventListener("change",e=>handleDeclutterFiles(e.target.files));
 $("#filePicker").addEventListener("change",e=>handleDeclutterFiles(e.target.files));
