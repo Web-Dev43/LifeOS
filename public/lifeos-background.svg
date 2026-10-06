@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 828 1792" preserveAspectRatio="xMidYMid slice">
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#55c8f2"/><stop offset="1" stop-color="#77d6f4"/></linearGradient>
+</defs>
+<rect width="828" height="1792" fill="url(#sky)"/>
+<!-- sun -->
+<g fill="#ffe51f" stroke="#ffe51f" stroke-linecap="round">
+  <circle cx="774" cy="196" r="72" stroke-width="0"/>
+  <path d="M774 92v-45M774 300v-45M670 196h-45M878 196h-45M700 122l-32-32M848 270l-32-32M848 122l32-32M700 270l-32 32" fill="none" stroke-width="18"/>
+</g>
+<!-- cloud -->
+<g fill="#fff">
+  <circle cx="510" cy="475" r="54"/><circle cx="570" cy="445" r="70"/><circle cx="645" cy="466" r="55"/><circle cx="694" cy="502" r="43"/>
+  <path d="M470 500h245c-10 48-45 66-91 66H505c-37 0-55-27-35-66z"/>
+</g>
+<!-- tree -->
+<path d="M48 1360 C65 1275 52 1170 38 1050 L70 1020 L61 865 C54 770 74 695 117 654 C151 621 193 615 230 639 C275 586 355 610 375 677 C421 703 429 774 396 820 C405 902 385 981 337 1024 C317 1100 327 1220 351 1352 L303 1417 L111 1412 Z" fill="#2ee12e"/>
+<path d="M105 1010 C128 1090 133 1200 123 1318 C112 1370 97 1411 81 1431 L226 1434 C255 1400 272 1364 277 1320 C256 1200 250 1090 266 1004 Z" fill="#a65d2d"/>
+<path d="M72 1418 C104 1390 143 1393 168 1419 C195 1385 240 1391 257 1424 C286 1395 332 1404 345 1438 L49 1438 C42 1430 51 1421 72 1418Z" fill="#a65d2d"/>
+<!-- flower -->
+<path d="M655 1380 C654 1305 655 1250 660 1200" stroke="#18a889" stroke-width="16" stroke-linecap="round" fill="none"/>
+<g fill="#ff3838"><circle cx="655" cy="1174" r="31"/><circle cx="690" cy="1190" r="31"/><circle cx="683" cy="1152" r="31"/><circle cx="647" cy="1145" r="31"/><circle cx="620" cy="1178" r="31"/></g>
+<circle cx="655" cy="1170" r="18" fill="#ffd51b"/>
+<!-- person -->
+<g fill="none" stroke="#111" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="438" cy="885" r="76" stroke-width="14"/>
+  <path d="M423 845v18M468 848v18M422 901q24 28 50 0" stroke-width="13"/>
+  <path d="M437 963v196M438 1007L302 953M442 1008L615 947M438 1158L345 1350M438 1158L510 1351" stroke-width="14"/>
+</g>
+<!-- grass -->
+<path d="M0 1400 Q190 1382 350 1402 T700 1400 Q770 1385 828 1410 V1792 H0Z" fill="#2edc39"/>
+<g fill="none" stroke="#16a93a" stroke-width="12" stroke-linecap="round">
+  <path d="M42 1510l20-25 10 25 22-28"/><path d="M287 1518l22-27 10 26 24-30"/><path d="M555 1515l21-28 12 25 23-30"/><path d="M748 1518l20-27 12 25 23-29"/>
+  <path d="M150 1640l22-27 12 25 23-29"/><path d="M430 1660l22-28 11 25 24-30"/><path d="M646 1710l20-28 11 25 25-30"/>
+</g>
+</svg>
