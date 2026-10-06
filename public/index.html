@@ -55,28 +55,31 @@ window.openLifeOSTool=function(tool){
   const home=document.getElementById("homeView");
   const app=document.getElementById("appViews");
   const views={deadline:"deadlineView",readeasy:"readeasyView",replybot:"replybotView",declutter:"digitalView"};
+  if(!home||!app)return;
   home.hidden=true;
   app.hidden=false;
   Object.entries(views).forEach(([name,id])=>{
     const el=document.getElementById(id);
-    if(el) el.hidden=name!==tool;
+    if(el)el.hidden=name!==tool;
   });
   document.querySelectorAll("[data-tool]").forEach(b=>b.classList.toggle("active",b.dataset.tool===tool));
   window.scrollTo(0,0);
 };
 window.openLifeOSHome=function(){
-  document.getElementById("appViews").hidden=true;
-  document.getElementById("homeView").hidden=false;
+  const app=document.getElementById("appViews");
+  const home=document.getElementById("homeView");
+  if(app)app.hidden=true;
+  if(home)home.hidden=false;
   window.scrollTo(0,0);
 };
 </script>
 <div id="appViews" hidden>
   <button type="button" id="homeButton" class="backHome" onclick="openLifeOSHome()">← LifeOS home</button>
   <nav class="switcher" aria-label="LifeOS tools">
-    <button class="tool active" data-tool="deadline">🗓️ Deadline</button>
-    <button class="tool" data-tool="readeasy">📖 ReadEasy</button>
-    <button class="tool" data-tool="replybot">💬 ReplyBot</button>
-    <button class="tool" data-tool="declutter">🧹 DigitalDeclutter</button>
+    <button type="button" class="tool active" data-tool="deadline" onclick="openLifeOSTool('deadline')">🗓️ Deadline</button>
+    <button type="button" class="tool" data-tool="readeasy" onclick="openLifeOSTool('readeasy')">📖 ReadEasy</button>
+    <button type="button" class="tool" data-tool="replybot" onclick="openLifeOSTool('replybot')">💬 ReplyBot</button>
+    <button type="button" class="tool" data-tool="declutter" onclick="openLifeOSTool('declutter')">🧹 DigitalDeclutter</button>
   </nav>
 <div id="deadlineView"><div class="brand">LifeOS / Deadline</div>
   <h1>Get ahead of it.</h1>
@@ -165,7 +168,7 @@ window.openLifeOSHome=function(){
 <script>
 (async function(){
   try{
-    const version="2026-10-06-10";
+    const version="2026-10-06-11";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -190,23 +193,31 @@ const homeView=$("#homeView"), appViews=$("#appViews"), homeButton=$("#homeButto
 const homeToolButtons=[...document.querySelectorAll("[data-home-tool]")];
 const toolButtons=[...document.querySelectorAll("[data-tool]")];
 const deadlineView=$("#deadlineView"), digitalView=$("#digitalView"), readeasyView=$("#readeasyView"), replybotView=$("#replybotView");
-function switchTool(tool){
-  homeView.hidden=true;
-  appViews.hidden=false;
-  toolButtons.forEach(b=>b.classList.toggle("active",b.dataset.tool===tool));
-  deadlineView.hidden=tool!=="deadline";
-  digitalView.hidden=tool!=="declutter";
-  readeasyView.hidden=tool!=="readeasy";
-  replybotView.hidden=tool!=="replybot";
-}
-toolButtons.forEach(b=>b.addEventListener("click",()=>switchTool(b.dataset.tool)));
-homeToolButtons.forEach(b=>b.addEventListener("click",()=>switchTool(b.dataset.homeTool)));
-homeButton.addEventListener("click",()=>{
-  appViews.hidden=true;
-  homeView.hidden=false;
-});
+function switchTool(tool){ window.openLifeOSTool(tool); }
+homeButton.addEventListener("click",()=>window.openLifeOSHome());
 
 const formatBytes=(n)=>{if(n<1024)return n+" B";if(n<1048576)return (n/1024).toFixed(1)+" KB";return (n/1048576).toFixed(1)+" MB";};
+function showDeclutterMessage(title,summary){
+  $("#declutterResults").hidden=false;
+  $("#declutterTitle").textContent=title;
+  $("#declutterSummary").textContent=summary;
+  $("#declutterGroups").innerHTML='<div class="meta" style="padding:14px 0">Give LifeOS a second. If something went wrong, the error will show here.</div>';
+}
+function handleDeclutterFiles(files){
+  const list=[...files||[]];
+  if(!list.length){
+    showDeclutterMessage("No files selected","LifeOS didn't receive any files. Try selecting them again.");
+    return;
+  }
+  showDeclutterMessage("Checking "+list.length+" item"+(list.length===1?"":"s")+"…","Analyzing your selection locally. Nothing is uploaded.");
+  requestAnimationFrame(()=>{
+    try{analyzeDeclutter(list);}
+    catch(error){
+      console.error("DigitalDeclutter analysis failed",error);
+      showDeclutterMessage("Couldn't analyze those files","LifeOS hit an error while checking the selection. Try choosing the files again.");
+    }
+  });
+}
 function analyzeDeclutter(files){
   const list=[...files];
   const groups={delete:[],review:[],keep:[]};
@@ -218,8 +229,8 @@ function analyzeDeclutter(files){
     arr.push(f);
     seen.set(key,arr);
   });
-  const important=/resume|cv|tax|passport|license|licence|medical|school|assignment|homework|project|contract|receipt|invoice|certificate|id\\b|important|final|portfolio|application|transcript|insurance|lease|rent|bank|budget/.test;
-  const junk=/^untitled(?: \\(\\d+\\))?|^document(?: \\(\\d+\\))?|^file(?: \\(\\d+\\))?|^image(?: \\(\\d+\\))?|^copy(?: \\(\\d+\\))?|^download(?: \\(\\d+\\))?|^img[_ -]?\\d+|^dsc[_ -]?\\d+|^vid[_ -]?\\d+/.test;
+  const important=/resume|cv|tax|passport|license|licence|medical|school|assignment|homework|project|contract|receipt|invoice|certificate|id\b|important|final|portfolio|application|transcript|insurance|lease|rent|bank|budget/;
+  const junk=/^untitled(?: \(\d+\))?|^document(?: \(\d+\))?|^file(?: \(\d+\))?|^image(?: \(\d+\))?|^copy(?: \(\d+\))?|^download(?: \(\d+\))?|^img[_ -]?\d+|^dsc[_ -]?\d+|^vid[_ -]?\d+/;
   for(const f of list){
     const name=f.name.toLowerCase();
     const ageDays=Math.max(0,Math.floor((now-f.lastModified)/86400000));
@@ -241,13 +252,13 @@ function analyzeDeclutter(files){
     else if(isDuplicate&&newest){bucket="keep";reason="Newest copy of a duplicate group.";}
     else if(screenshot&&ageDays>30){bucket="review";reason="Older screenshot that may no longer be useful.";}
     else if(oldDownload){bucket="review";reason="Old download. You may not need it anymore.";}
-    else if(junk(name)){bucket="review";reason="Generic or camera-generated name. Worth checking.";}
+    else if(junk.test(name)){bucket="review";reason="Generic or camera-generated name. Worth checking.";}
     else if(archive&&ageDays>180){bucket="review";reason="Old installer/archive that may be taking up space.";}
     else if(huge&&ageDays>90){bucket="review";reason="Very large file that hasn't been touched recently.";}
     else if(large&&old){bucket="review";reason="Large file that hasn't been touched in over a year.";}
-    else if(veryOld&&!important(name)){bucket="review";reason="More than 2 years old without an obvious important name.";}
-    else if(old&&media&&!important(name)){bucket="review";reason="Older photo, video, or audio file worth reviewing.";}
-    else if(important(name)){bucket="keep";reason="The name suggests this could be important.";}
+    else if(veryOld&&!important.test(name)){bucket="review";reason="More than 2 years old without an obvious important name.";}
+    else if(old&&media&&!important.test(name)){bucket="review";reason="Older photo, video, or audio file worth reviewing.";}
+    else if(important.test(name)){bucket="keep";reason="The name suggests this could be important.";}
     else if(ageDays<=30){bucket="keep";reason="Recently modified. Probably still relevant.";}
     groups[bucket].push({file:f,reason});
   }
@@ -262,8 +273,8 @@ function renderDeclutter(groups){
     (items.length?items.map(x=>'<div class="declutterItem"><div class="fileIcon">'+(x.file.type.startsWith("image/")?"🖼️":"📄")+'</div><div class="fileInfo"><div class="fileName">'+escapeHtml(x.file.name)+'</div><div class="fileReason '+cls+'">'+escapeHtml(x.reason)+" · "+formatBytes(x.file.size)+'</div></div></div>').join(""):'<div class="meta" style="padding-top:10px">Nothing here. Nice.</div>')+'</div>';
   $("#declutterGroups").innerHTML=section("Probably delete","deleteBadge",groups.delete,"🗑️")+section("Review","reviewBadge",groups.review,"🟡")+section("Keep","keepBadge",groups.keep,"⭐");
 }
-$("#photoPicker").addEventListener("change",e=>analyzeDeclutter(e.target.files));
-$("#filePicker").addEventListener("change",e=>analyzeDeclutter(e.target.files));
+$("#photoPicker").addEventListener("change",e=>handleDeclutterFiles(e.target.files));
+$("#filePicker").addEventListener("change",e=>handleDeclutterFiles(e.target.files));
 $("#clearDeclutter").addEventListener("click",()=>{
   $("#photoPicker").value="";$("#filePicker").value="";$("#declutterResults").hidden=true;$("#declutterGroups").innerHTML="";
 });
@@ -329,7 +340,7 @@ async function enableNotifications(){
     const cr = await fetch("/api/push/config",{cache:"no-store"});
     if (!cr.ok) throw new Error("Notification server error: "+cr.status);
     const config = await cr.json();
-    const reg = await navigator.serviceWorker.register("/sw.js?v=4",{updateViaCache:"none"});
+    const reg = await navigator.serviceWorker.register("/sw.js?v=5",{updateViaCache:"none"});
     await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
@@ -348,22 +359,35 @@ async function restoreNotificationState(){
     if(!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
     const standalone=window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true;
     if(!standalone) return;
-    const reg=await navigator.serviceWorker.register("/sw.js?v=4",{updateViaCache:"none"});
+    const reg=await navigator.serviceWorker.register("/sw.js?v=5",{updateViaCache:"none"});
     await navigator.serviceWorker.ready;
     const sub=await reg.pushManager.getSubscription();
     if(sub && Notification.permission==="granted"){
+      const sr=await fetch("/api/push/subscribe",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,timezone:deviceTimeZone(),subscription:sub.toJSON()})});
+      if(!sr.ok)throw new Error("LifeOS couldn't restore your notification subscription.");
       $("#notifyStatus").textContent="Phone reminders are on 🔔";
       $("#notifyStatus").className="ok";
       $("#notifyTitle").textContent="Phone reminders are on 🔔";
       $("#notifyBtn").textContent="Test";
       $("#notifyBtn").onclick=testNotification;
     }
-  }catch(e){ console.warn("Could not restore notification state",e); }
+  }catch(e){console.warn("Could not restore notification state",e);}
 }
 async function testNotification(){
-  const btn=$("#notifyBtn"); btn.disabled=true;
-  await fetch("/api/push/test",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId})});
-  btn.disabled=false;
+  const btn=$("#notifyBtn"),status=$("#notifyStatus");
+  btn.disabled=true;
+  try{
+    const r=await fetch("/api/push/test",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId})});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(data.error||"LifeOS couldn't send the test notification.");
+    if(!data.delivered)throw new Error("LifeOS has no active phone subscription. Turn reminders off and back on.");
+    status.textContent="Test notification sent 🔔";
+    status.className="ok";
+  }catch(e){
+    console.error("Test notification failed",e);
+    status.textContent=e.message||"Couldn't send the test notification.";
+    status.className="warn";
+  }finally{btn.disabled=false;}
 }
 async function loadPlan(){
   try {
@@ -391,7 +415,9 @@ $("#tasks").addEventListener("change",async e=>{
   const el=e.target.closest('[data-action="priority"]'); if(!el)return;
   await patchTask(el.dataset.id,{priority:el.value==="smart"?null:el.value,priorityAuto:el.value==="smart"});
 });
-if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js?v=4",{updateViaCache:"none"}).catch(console.error);
+if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js?v=5",{updateViaCache:"none"}).catch(console.error);
+const requestedTool=new URLSearchParams(location.search).get("tool");
+if(["deadline","readeasy","replybot","declutter"].includes(requestedTool))window.openLifeOSTool(requestedTool);
 load(); loadPlan(); restoreNotificationState();
 
 </script>
