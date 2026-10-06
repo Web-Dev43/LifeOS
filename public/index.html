@@ -131,7 +131,7 @@
 <script>
 (async function(){
   try{
-    const version="2026-10-06-5";
+    const version="2026-10-06-6";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -164,7 +164,7 @@ function switchTool(tool){
 toolButtons.forEach(b=>b.addEventListener("click",()=>switchTool(b.dataset.tool)));
 
 const formatBytes=(n)=>{if(n<1024)return n+" B";if(n<1048576)return (n/1024).toFixed(1)+" KB";return (n/1048576).toFixed(1)+" MB";};
-function analyzeDeclutter(files){
+async function analyzeDeclutter(files){
   const list=[...files];
   const groups={delete:[],review:[],keep:[]};
   const now=Date.now();
@@ -177,37 +177,51 @@ function analyzeDeclutter(files){
   });
   const important=/resume|cv|tax|passport|license|licence|medical|school|assignment|homework|project|contract|receipt|invoice|certificate|id\b|important|final|portfolio|application|transcript|insurance|lease|rent|bank|budget/.test;
   const junk=/^untitled(?: \(\d+\))?|^document(?: \(\d+\))?|^file(?: \(\d+\))?|^image(?: \(\d+\))?|^copy(?: \(\d+\))?|^download(?: \(\d+\))?|^img[_ -]?\d+|^dsc[_ -]?\d+|^vid[_ -]?\d+/.test;
-  list.forEach(f=>{
-    const name=f.name.toLowerCase();
-    const ageDays=Math.max(0,Math.floor((now-f.lastModified)/86400000));
-    const duplicateGroup=seen.get(name+"|"+f.size)||[];
-    const isDuplicate=duplicateGroup.length>1;
-    const isNewest=isDuplicate && f.lastModified===Math.max(...duplicateGroup.map(x=>x.lastModified));
-    const screenshot=/screenshot|screen.?shot|screen recording/.test(name);
-    const temp=/\.tmp$|\.temp$|^~|\.crdownload$|\.part$|\.download$/.test(name);
-    const oldDownload=/download|downloads/.test(name) && ageDays>60;
-    const veryOld=ageDays>730;
-    const old=ageDays>365;
-    const huge=f.size>500*1024*1024;
-    const large=f.size>100*1024*1024;
-    const media=/^(image|video|audio)\//.test(f.type);
-    const archive=/\.(zip|rar|7z|dmg|pkg|exe|msi)$/i.test(name);
-    let bucket="review",reason="LifeOS isn't sure. Give this one a quick look.";
-    if(temp){bucket="delete";reason="Looks like a temporary or incomplete file.";}
-    else if(isDuplicate && !isNewest){bucket="delete";reason="Older duplicate of another selected file with the same name and size.";}
-    else if(isDuplicate && isNewest){bucket="keep";reason="Newest copy of a duplicate group. Keep this one and review the older copies.";}
-    else if(screenshot && ageDays>30){bucket="review";reason="Older screenshot. These often pile up without being useful.";}
-    else if(oldDownload){bucket="review";reason="Old download. You may not need it anymore.";}
-    else if(junk(name)){bucket="review";reason="Generic or camera-generated name. Worth checking whether this still matters.";}
-    else if(archive && ageDays>180){bucket="review";reason="Old installer/archive. It may be taking up space for no reason.";}
-    else if(huge && ageDays>90){bucket="review";reason="Very large file that hasn't been touched recently.";}
-    else if(large && old){bucket="review";reason="Large file that hasn't been touched in over a year.";}
-    else if(veryOld && !important(name)){bucket="review";reason="More than 2 years old without an obvious important name.";}
-    else if(old && media && !important(name)){bucket="review";reason="Older photo, video, or audio file. Worth deciding if you still want it.";}
-    else if(important(name)){bucket="keep";reason="Name suggests this could be important. Keep it unless you know you don't need it.";}
-    else if(ageDays<=30){bucket="keep";reason="Recently modified. Probably still relevant.";}
-    groups[bucket].push({file:f,reason});
-  });
+  const total=list.length;
+  $("#declutterResults").hidden=false;
+  $("#declutterTitle").textContent="Checking "+total+" item"+(total===1?"":"s")+"…";
+  $("#declutterSummary").textContent="LifeOS is processing them in small batches so your phone doesn't choke.";
+  $("#declutterGroups").innerHTML='<div class="meta" style="padding:14px 0">0 / '+total+' checked…</div>';
+  const batchSize=40;
+  for(let start=0;start<list.length;start+=batchSize){
+    const batch=list.slice(start,start+batchSize);
+    await new Promise(requestAnimationFrame);
+    for(const f of batch){
+      const name=f.name.toLowerCase();
+      const ageDays=Math.max(0,Math.floor((now-f.lastModified)/86400000));
+      const duplicateGroup=seen.get(name+"|"+f.size)||[];
+      const isDuplicate=duplicateGroup.length>1;
+      const isNewest=isDuplicate && f.lastModified===Math.max(...duplicateGroup.map(x=>x.lastModified));
+      const screenshot=/screenshot|screen.?shot|screen recording/.test(name);
+      const temp=/\.tmp$|\.temp$|^~|\.crdownload$|\.part$|\.download$/.test(name);
+      const oldDownload=/download|downloads/.test(name) && ageDays>60;
+      const veryOld=ageDays>730;
+      const old=ageDays>365;
+      const huge=f.size>500*1024*1024;
+      const large=f.size>100*1024*1024;
+      const media=/^(image|video|audio)\//.test(f.type);
+      const archive=/\.(zip|rar|7z|dmg|pkg|exe|msi)$/i.test(name);
+      let bucket="review",reason="LifeOS isn't sure. Give this one a quick look.";
+      if(temp){bucket="delete";reason="Looks like a temporary or incomplete file.";}
+      else if(isDuplicate && !isNewest){bucket="delete";reason="Older duplicate of another selected file with the same name and size.";}
+      else if(isDuplicate && isNewest){bucket="keep";reason="Newest copy of a duplicate group. Keep this one and review the older copies.";}
+      else if(screenshot && ageDays>30){bucket="review";reason="Older screenshot. These often pile up without being useful.";}
+      else if(oldDownload){bucket="review";reason="Old download. You may not need it anymore.";}
+      else if(junk(name)){bucket="review";reason="Generic or camera-generated name. Worth checking whether this still matters.";}
+      else if(archive && ageDays>180){bucket="review";reason="Old installer/archive. It may be taking up space for no reason.";}
+      else if(huge && ageDays>90){bucket="review";reason="Very large file that hasn't been touched recently.";}
+      else if(large && old){bucket="review";reason="Large file that hasn't been touched in over a year.";}
+      else if(veryOld && !important(name)){bucket="review";reason="More than 2 years old without an obvious important name.";}
+      else if(old && media && !important(name)){bucket="review";reason="Older photo, video, or audio file. Worth deciding if you still want it.";}
+      else if(important(name)){bucket="keep";reason="Name suggests this could be important. Keep it unless you know you don't need it.";}
+      else if(ageDays<=30){bucket="keep";reason="Recently modified. Probably still relevant.";}
+      groups[bucket].push({file:f,reason});
+    }
+    const checked=Math.min(start+batch.length,total);
+    $("#declutterTitle").textContent="Checking "+checked+" of "+total+"…";
+    $("#declutterSummary").textContent=groups.delete.length+" probably delete · "+groups.review.length+" review · "+groups.keep.length+" keep";
+    await new Promise(requestAnimationFrame);
+  }
   renderDeclutter(groups);
 }
 function renderDeclutter(groups){
