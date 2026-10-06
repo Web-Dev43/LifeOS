@@ -24,7 +24,7 @@
     .meta{font-size:12px;color:#92929f;margin-top:4px}.high{color:#ff8b8b}.medium{color:#f4ca72}.low{color:#80d8a3}
     .prioritySelect{width:auto;min-width:110px;padding:7px 28px 7px 9px;font-size:11px;border-radius:10px}.delete{width:auto;padding:7px 9px;background:transparent;color:#888;border:1px solid #30303a}.empty{text-align:center;color:#8f8f9c;padding:30px 10px}
     .notify{display:flex;align-items:center;justify-content:space-between;gap:12px}.notify-copy{min-width:0}.notify-copy b{display:block}.notify-copy span{color:#9696a2;font-size:12px}
-    .notify button{width:auto;white-space:nowrap}.ok{color:#80d8a3}.warn{color:#f4ca72}
+    .notify button{width:auto;white-space:nowrap}.planHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.plan h2{font-size:26px;margin:0 0 4px}.plan .sub{margin:0}.refresh{width:auto;padding:8px 12px;background:#0f0f15;color:#fff;border:1px solid #30303a}.planItem{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid #282831}.planItem:last-child{border-bottom:0}.planNum{font-weight:900;font-size:18px;width:24px}.planInfo{flex:1;min-width:0}.planTitle{font-weight:800}.planMeta{font-size:12px;color:#92929f;margin-top:4px}.planReason{font-size:12px;margin-top:7px;color:#c7c7d0}.planEmpty{padding:18px 0;color:#80d8a3;font-weight:700}.ok{color:#80d8a3}.warn{color:#f4ca72}
     @media(max-width:520px){h1{font-size:36px}.row{grid-template-columns:1fr}.notify{align-items:flex-start;flex-direction:column}.notify button{width:100%}}
   </style>
 </head>
@@ -34,7 +34,7 @@
   <h1>Get ahead of it.</h1>
   <p class="sub">Your assignments, without the last-minute boss battle.</p>
 
-  <section class="stats">
+  <section class="card plan" id="planCard"><div class="planHead"><div><div class="brand">Today Plan</div><h2 id="planTitle">What should I do?</h2><p id="planSummary" class="sub">LifeOS is figuring it out...</p></div><button class="refresh" onclick="loadPlan()">↻</button></div><div id="plan"></div></section>\n\n  <section class="stats">
     <div class="stat"><b id="total">0</b><span>Total</span></div>
     <div class="stat"><b id="open">0</b><span>Open</span></div>
     <div class="stat"><b id="done">0</b><span>Done</span></div>
@@ -152,7 +152,7 @@ form.onsubmit=async e=>{
   await fetch("/api/tasks",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,title:$("#title").value,dueDate:$("#date").value})});
   form.reset(); $("#date").value=today(); await load();
 };
-async function changePriority(id,value){
+async function loadPlan(){try{const r=await fetch("/api/plan?deviceId="+encodeURIComponent(deviceId));const data=await r.json();const items=data.items||[];$("#planSummary").textContent=items.length?data.totalMinutes+" min of focused work. Here’s the order LifeOS recommends.":"Nothing urgent. You’re caught up 🎉";$("#planTitle").textContent=items.length?"Your next moves":"You’re clear";$("#plan").innerHTML=items.length?items.map((t,i)=>"<div class=\"planItem\"><div class=\"planNum\">"+(i+1)+"</div><div class=\"planInfo\"><div class=\"planTitle\">"+escapeHtml(t.title)+"</div><div class=\"planMeta\">"+t.minutes+" min · "+escapeHtml(t.due_date)+" · "+escapeHtml(t.priority.toUpperCase())+"</div><div class=\"planReason\">"+escapeHtml(t.reason)+"</div></div></div>").join(""):"<div class=\"planEmpty\">No open tasks. Go enjoy the fact that your life is currently not on fire. 🔥</div>"}catch(e){$("#planSummary").textContent="Couldn’t load the plan yet."}}\nasync function changePriority(id,value){
   await fetch("/api/tasks/"+id,{method:"PATCH",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,priority:value==="smart"?null:value,priorityAuto:value==="smart"})});
   load();
 }
