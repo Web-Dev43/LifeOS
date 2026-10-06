@@ -236,7 +236,7 @@ function analyzeDeclutter(files){
     const ageDays=Math.max(0,Math.floor((now-f.lastModified)/86400000));
     const duplicateGroup=seen.get(name+"|"+f.size)||[];
     const isDuplicate=duplicateGroup.length>1;
-    const newest=isDuplicate && f.lastModified===Math.max(...duplicateGroup.map(x=>x.lastModified));
+    const newest=isDuplicate && f.lastModified===duplicateGroup.reduce((latest,x)=>Math.max(latest,x.lastModified),0);
     const screenshot=/screenshot|screen.?shot|screen recording/.test(name);
     const temp=/\\.tmp$|\\.temp$|^~|\\.crdownload$|\\.part$|\\.download$/.test(name);
     const oldDownload=/download|downloads/.test(name)&&ageDays>60;
