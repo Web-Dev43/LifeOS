@@ -9,8 +9,8 @@ function smartPriority(title,dueDate){
  const text=String(title||"").toLowerCase(), due=new Date(dueDate+"T23:59:59"), now=new Date();
  const days=Math.ceil((due-now)/86400000);
  let score=days<0?6:days<=0?5:days===1?4:days<=3?3:days<=7?1:0;
- const high=["exam","test","final","quiz","midterm","project","presentation","application","interview","deadline","essay","report","paper","payment","bill","appointment","meeting","due"];
- const low=["optional","extra credit","when you can","someday","practice"];
+ const high=["exam","test","final","quiz","midterm","project","presentation","application","interview","deadline","essay","report","paper","payment","bill","appointment","meeting","due","important","urgent","critical","asap","must do","must-do"];
+ const low=["optional","extra credit","when you can","someday","practice","not important","unimportant","not urgent","low priority","doesn't matter","does not matter"];
  for(const s of high)if(text.includes(s))score+=2;
  for(const s of low)if(text.includes(s))score-=1;
  return score>=6?"high":score>=3?"medium":"low";
