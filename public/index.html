@@ -14,7 +14,7 @@
     main{width:min(720px,100%);margin:auto}.brand{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#9b9ba7;margin-bottom:8px}
     h1{font-size:42px;line-height:1;margin:0 0 8px}.sub{color:#a9a9b4;margin:0 0 24px}
     .card{background:#15151c;border:1px solid #292933;border-radius:20px;padding:16px;margin-bottom:16px;box-shadow:0 12px 40px #0005}
-    form{display:grid;gap:10px}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    form{display:grid;gap:10px}
     input,select,button{width:100%;border:1px solid #30303a;border-radius:13px;padding:13px;background:#0f0f15;color:#fff;font:inherit}
     button{background:#fff;color:#0b0b0f;border:0;font-weight:800;cursor:pointer}.stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
     .stat{flex:1;min-width:100px;background:#15151c;border:1px solid #292933;border-radius:16px;padding:14px}.stat b{display:block;font-size:24px}.stat span{color:#8f8f9c;font-size:12px}
@@ -22,7 +22,7 @@
     .check{width:26px;height:26px;padding:0;border:1px solid #555563;border-radius:50%;background:transparent;flex:none}.check.done{background:#fff;color:#000}
     .info{min-width:0;flex:1}.title{font-weight:750;overflow-wrap:anywhere}.doneText{text-decoration:line-through;color:#777784}
     .meta{font-size:12px;color:#92929f;margin-top:4px}.high{color:#ff8b8b}.medium{color:#f4ca72}.low{color:#80d8a3}
-    .delete{width:auto;padding:7px 9px;background:transparent;color:#888;border:1px solid #30303a}.empty{text-align:center;color:#8f8f9c;padding:30px 10px}
+    .prioritySelect{width:auto;min-width:110px;padding:7px 28px 7px 9px;font-size:11px;border-radius:10px}.delete{width:auto;padding:7px 9px;background:transparent;color:#888;border:1px solid #30303a}.empty{text-align:center;color:#8f8f9c;padding:30px 10px}
     .notify{display:flex;align-items:center;justify-content:space-between;gap:12px}.notify-copy{min-width:0}.notify-copy b{display:block}.notify-copy span{color:#9696a2;font-size:12px}
     .notify button{width:auto;white-space:nowrap}.ok{color:#80d8a3}.warn{color:#f4ca72}
     @media(max-width:520px){h1{font-size:36px}.row{grid-template-columns:1fr}.notify{align-items:flex-start;flex-direction:column}.notify button{width:100%}}
@@ -51,14 +51,8 @@
   <section class="card">
     <form id="form">
       <input id="title" placeholder="Assignment or task..." maxlength="160" required>
-      <div class="row">
-        <input id="date" type="date" required>
-        <select id="priority">
-          <option value="medium">Medium priority</option>
-          <option value="high">High priority</option>
-          <option value="low">Low priority</option>
-        </select>
-      </div>
+      <input id="date" type="date" required>
+      <div class="meta">LifeOS will figure out priority from the deadline and what the task sounds like. You can change it later.</div>
       <button>Add task</button>
     </form>
   </section>
@@ -97,6 +91,12 @@ function render(tasks){
         <div class="title ${t.completed?'doneText':''}">${escapeHtml(t.title)}</div>
         <div class="meta ${t.priority}">${t.priority.toUpperCase()} · Due ${escapeHtml(t.due_date)}${overdue?' · OVERDUE':''}</div>
       </div>
+      <select class="prioritySelect ${t.priority}" aria-label="Priority" onchange="changePriority(${t.id},this.value)">
+        <option value="smart" ${t.priority_auto?'selected':''}>Smart</option>
+        <option value="high" ${!t.priority_auto&&t.priority==='high'?'selected':''}>High</option>
+        <option value="medium" ${!t.priority_auto&&t.priority==='medium'?'selected':''}>Medium</option>
+        <option value="low" ${!t.priority_auto&&t.priority==='low'?'selected':''}>Low</option>
+      </select>
       <button class="delete" onclick="removeTask(${t.id})">×</button>
     </div>`
   }).join("");
@@ -149,9 +149,13 @@ function base64urlToUint8Array(base64url){
 }
 form.onsubmit=async e=>{
   e.preventDefault();
-  await fetch("/api/tasks",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,title:$("#title").value,dueDate:$("#date").value,priority:$("#priority").value})});
-  form.reset(); $("#date").value=today(); $("#priority").value="medium"; await load();
+  await fetch("/api/tasks",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,title:$("#title").value,dueDate:$("#date").value})});
+  form.reset(); $("#date").value=today(); await load();
 };
+async function changePriority(id,value){
+  await fetch("/api/tasks/"+id,{method:"PATCH",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,priority:value==="smart"?null:value,priorityAuto:value==="smart"})});
+  load();
+}
 async function toggle(id,completed){await fetch("/api/tasks/"+id,{method:"PATCH",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({completed,deviceId})});load()}
 async function removeTask(id){await fetch("/api/tasks/"+id,{method:"DELETE",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId})});load()}
 if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
