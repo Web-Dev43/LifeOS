@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b0b0f">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -10,7 +10,7 @@
   <title>LifeOS • Deadline</title>
   <style>
     :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#171717;background:#55c8f2}
-    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#55c8f2 url("/lifeos-background.svg") center top/cover fixed no-repeat;padding:24px 16px 48px}
+    *{box-sizing:border-box}html,body{touch-action:manipulation}body{margin:0;min-height:100vh;background:#55c8f2 url("/lifeos-background.svg") center top/cover fixed no-repeat;padding:24px 16px 48px}
     main{width:min(720px,100%);margin:auto}.brand{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#555;margin-bottom:8px}
     h1{font-size:42px;line-height:1;margin:0 0 8px}.sub{color:#555;margin:0 0 24px}
     .card{background:rgba(255,255,255,.88);border:1px solid rgba(255,255,255,.9);border-radius:20px;padding:16px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.14);backdrop-filter:blur(10px)}
@@ -29,7 +29,7 @@
   
     .landing{text-align:center;padding:8vh 0 4vh}.landingBrand{font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:#9b9ba7;margin-bottom:14px}.landing h1{font-size:clamp(48px,12vw,78px);letter-spacing:-.05em;margin:0}.landingSlogan{font-size:clamp(18px,4vw,24px);color:#444;margin:14px auto 34px;max-width:520px}.landingTools{display:grid;grid-template-columns:1fr 1fr;gap:14px;text-align:left}.landingTool{display:block;text-align:left;padding:22px;border:1px solid rgba(255,255,255,.9);border-radius:20px;background:rgba(255,255,255,.88);color:#171717;box-shadow:0 10px 25px rgba(0,0,0,.12);backdrop-filter:blur(10px);transition:transform .15s,border-color .15s}.landingTool:hover{transform:translateY(-2px);border-color:#555563}.landingTool:active{transform:scale(.98)}.landingTool .emoji{font-size:30px;display:block;margin-bottom:14px}.landingTool b{font-size:20px;display:block}.landingTool span{display:block;color:#666;font-size:13px;line-height:1.4;margin-top:6px}.backHome{width:auto;margin:0 0 16px;padding:8px 12px;background:rgba(255,255,255,.88);color:#171717;border:1px solid rgba(255,255,255,.9);box-shadow:0 6px 16px rgba(0,0,0,.1)}.switcher{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:0 0 22px;padding:6px;background:rgba(255,255,255,.82);border:1px solid rgba(255,255,255,.9);border-radius:16px;position:sticky;top:10px;z-index:10;backdrop-filter:blur(14px)}
     .tool{padding:10px 6px;background:transparent;color:#555;border:0;border-radius:11px;font-size:12px;font-weight:800;line-height:1.2}
-    .tool.active{background:#171717;color:#fff}.tool:active{transform:scale(.98)}
+    .tool.active{background:rgba(255,255,255,.92);color:#171717;box-shadow:0 3px 10px rgba(0,0,0,.08)}.tool:active{transform:scale(.98)}
     .toolView{animation:fadeIn .18s ease}.declutterChoices{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pick{display:flex;flex-direction:column;gap:7px;padding:18px;border:1px solid rgba(0,0,0,.12);border-radius:16px;background:rgba(255,255,255,.72);color:#171717;cursor:pointer}.pick>span{font-size:28px}.pick b{font-size:16px}.pick small{color:#666;line-height:1.35}.pick input{display:none}
     .declutterGroup{padding:16px 0;border-bottom:1px solid rgba(0,0,0,.1)}.declutterGroup:last-child{border-bottom:0}.declutterHead{display:flex;justify-content:space-between;gap:10px;align-items:center}.declutterHead h3{margin:0;font-size:18px}.declutterHead span{font-size:12px;color:#92929f}.declutterItem{display:flex;gap:10px;padding:11px 0;border-bottom:1px solid rgba(0,0,0,.08)}.declutterItem:last-child{border-bottom:0}.fileIcon{font-size:20px}.fileInfo{min-width:0;flex:1}.fileName{font-weight:700;overflow-wrap:anywhere}.fileReason{font-size:12px;color:#666;margin-top:3px}.deleteBadge{color:#ff8b8b}.reviewBadge{color:#f4ca72}.keepBadge{color:#80d8a3}
     @keyframes fadeIn{from{opacity:.5;transform:translateY(3px)}to{opacity:1;transform:none}}
@@ -63,14 +63,15 @@ window.openLifeOSTool=function(tool){
     if(el)el.hidden=name!==tool;
   });
   document.querySelectorAll("[data-tool]").forEach(b=>b.classList.toggle("active",b.dataset.tool===tool));
-  window.scrollTo(0,0);
+  document.documentElement.scrollTop=0; document.body.scrollTop=0; window.scrollTo({top:0,left:0,behavior:"instant"});
 };
 window.openLifeOSHome=function(){
   const app=document.getElementById("appViews");
   const home=document.getElementById("homeView");
   if(app)app.hidden=true;
   if(home)home.hidden=false;
-  window.scrollTo(0,0);
+  document.documentElement.scrollTop=0; document.body.scrollTop=0; window.scrollTo({top:0,left:0,behavior:"instant"});
+};
 };
 </script>
 <div id="appViews" hidden>
@@ -168,7 +169,7 @@ window.openLifeOSHome=function(){
 <script>
 (async function(){
   try{
-    const version="2026-10-06-14";
+    const version="2026-10-06-15";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -219,48 +220,59 @@ function handleDeclutterFiles(files){
   });
 }
 function analyzeDeclutter(files){
-  const list=[...files];
   const groups={delete:[],review:[],keep:[]};
   const now=Date.now();
+  const list=Array.from(files||[]).map((f,index)=>({
+    id:index,
+    name:String(f?.name||"Untitled item"),
+    size:Number.isFinite(Number(f?.size))?Number(f.size):0,
+    type:String(f?.type||""),
+    lastModified:Number.isFinite(Number(f?.lastModified))?Number(f.lastModified):now
+  }));
   const seen=new Map();
-  list.forEach(f=>{
-    const key=f.name.toLowerCase()+"|"+f.size;
+  for(const item of list){
+    const key=item.name.toLowerCase()+"|"+item.size;
     const arr=seen.get(key)||[];
-    arr.push(f);
+    arr.push(item);
     seen.set(key,arr);
-  });
-  const important=/resume|cv|tax|passport|license|licence|medical|school|assignment|homework|project|contract|receipt|invoice|certificate|id\b|important|final|portfolio|application|transcript|insurance|lease|rent|bank|budget/;
-  const junk=/^untitled(?: \(\d+\))?|^document(?: \(\d+\))?|^file(?: \(\d+\))?|^image(?: \(\d+\))?|^copy(?: \(\d+\))?|^download(?: \(\d+\))?|^img[_ -]?\d+|^dsc[_ -]?\d+|^vid[_ -]?\d+/;
-  for(const f of list){
-    const name=f.name.toLowerCase();
-    const ageDays=Math.max(0,Math.floor((now-f.lastModified)/86400000));
-    const duplicateGroup=seen.get(name+"|"+f.size)||[];
-    const isDuplicate=duplicateGroup.length>1;
-    const newest=isDuplicate && f.lastModified===duplicateGroup.reduce((latest,x)=>Math.max(latest,x.lastModified),0);
-    const screenshot=/screenshot|screen.?shot|screen recording/.test(name);
-    const temp=/\\.tmp$|\\.temp$|^~|\\.crdownload$|\\.part$|\\.download$/.test(name);
-    const oldDownload=/download|downloads/.test(name)&&ageDays>60;
-    const veryOld=ageDays>730;
-    const old=ageDays>365;
-    const huge=f.size>500*1024*1024;
-    const large=f.size>100*1024*1024;
-    const media=/^(image|video|audio)\\//.test(f.type);
-    const archive=/\\.(zip|rar|7z|dmg|pkg|exe|msi)$/i.test(name);
-    let bucket="review",reason="LifeOS isn't sure. Give this one a quick look.";
-    if(temp){bucket="delete";reason="Looks like a temporary or incomplete file.";}
-    else if(isDuplicate&&!newest){bucket="delete";reason="Older duplicate of another selected file with the same name and size.";}
-    else if(isDuplicate&&newest){bucket="keep";reason="Newest copy of a duplicate group.";}
-    else if(screenshot&&ageDays>30){bucket="review";reason="Older screenshot that may no longer be useful.";}
-    else if(oldDownload){bucket="review";reason="Old download. You may not need it anymore.";}
-    else if(junk.test(name)){bucket="review";reason="Generic or camera-generated name. Worth checking.";}
-    else if(archive&&ageDays>180){bucket="review";reason="Old installer/archive that may be taking up space.";}
-    else if(huge&&ageDays>90){bucket="review";reason="Very large file that hasn't been touched recently.";}
-    else if(large&&old){bucket="review";reason="Large file that hasn't been touched in over a year.";}
-    else if(veryOld&&!important.test(name)){bucket="review";reason="More than 2 years old without an obvious important name.";}
-    else if(old&&media&&!important.test(name)){bucket="review";reason="Older photo, video, or audio file worth reviewing.";}
-    else if(important.test(name)){bucket="keep";reason="The name suggests this could be important.";}
-    else if(ageDays<=30){bucket="keep";reason="Recently modified. Probably still relevant.";}
-    groups[bucket].push({file:f,reason});
+  }
+  const important=/resume|cv|tax|passport|license|licence|medical|school|assignment|homework|project|contract|receipt|invoice|certificate|id\\b|important|final|portfolio|application|transcript|insurance|lease|rent|bank|budget/i;
+  const junk=/^untitled(?: \\(\\d+\\))?|^document(?: \\(\\d+\\))?|^file(?: \\(\\d+\\))?|^image(?: \\(\\d+\\))?|^copy(?: \\(\\d+\\))?|^download(?: \\(\\d+\\))?|^img[_ -]?\\d+|^dsc[_ -]?\\d+|^vid[_ -]?\\d+/i;
+  for(const item of list){
+    try{
+      const name=item.name.toLowerCase();
+      const ageDays=Math.max(0,Math.floor((now-item.lastModified)/86400000));
+      const duplicateGroup=seen.get(name+"|"+item.size)||[];
+      const isDuplicate=duplicateGroup.length>1;
+      const newest=isDuplicate && item.lastModified===duplicateGroup.reduce((latest,x)=>Math.max(latest,x.lastModified),0);
+      const screenshot=/screenshot|screen.?shot|screen recording/i.test(name);
+      const temp=/\\.tmp$|\\.temp$|^~|\\.crdownload$|\\.part$|\\.download$/i.test(name);
+      const oldDownload=/download|downloads/i.test(name)&&ageDays>60;
+      const veryOld=ageDays>730;
+      const old=ageDays>365;
+      const huge=item.size>500*1024*1024;
+      const large=item.size>100*1024*1024;
+      const media=/^(image|video|audio)\\//i.test(item.type);
+      const archive=/\\.(zip|rar|7z|dmg|pkg|exe|msi)$/i.test(name);
+      let bucket="review",reason="LifeOS isn't sure. Give this one a quick look.";
+      if(temp){bucket="delete";reason="Looks like a temporary or incomplete file.";}
+      else if(isDuplicate&&!newest){bucket="delete";reason="Older duplicate of another selected file with the same name and size.";}
+      else if(isDuplicate&&newest){bucket="keep";reason="Newest copy of a duplicate group.";}
+      else if(screenshot&&ageDays>30){bucket="review";reason="Older screenshot that may no longer be useful.";}
+      else if(oldDownload){bucket="review";reason="Old download. You may not need it anymore.";}
+      else if(junk.test(name)){bucket="review";reason="Generic or camera-generated name. Worth checking.";}
+      else if(archive&&ageDays>180){bucket="review";reason="Old installer/archive that may be taking up space.";}
+      else if(huge&&ageDays>90){bucket="review";reason="Very large file that hasn't been touched recently.";}
+      else if(large&&old){bucket="review";reason="Large file that hasn't been touched in over a year.";}
+      else if(veryOld&&!important.test(name)){bucket="review";reason="More than 2 years old without an obvious important name.";}
+      else if(old&&media&&!important.test(name)){bucket="review";reason="Older photo, video, or audio file worth reviewing.";}
+      else if(important.test(name)){bucket="keep";reason="The name suggests this could be important.";}
+      else if(ageDays<=30){bucket="keep";reason="Recently modified. Probably still relevant.";}
+      groups[bucket].push({file:item,reason});
+    }catch(error){
+      console.warn("DigitalDeclutter skipped one item",item?.name,error);
+      groups.review.push({file:item,reason:"LifeOS couldn't confidently classify this item, so it needs a quick look."});
+    }
   }
   renderDeclutter(groups);
 }
@@ -270,7 +282,7 @@ function renderDeclutter(groups){
   $("#declutterTitle").textContent=all.length+" item"+(all.length===1?"":"s")+" checked";
   $("#declutterSummary").textContent=groups.delete.length+" probably delete · "+groups.review.length+" review · "+groups.keep.length+" keep";
   const section=(title,cls,items,icon)=>'<div class="declutterGroup"><div class="declutterHead"><h3>'+icon+" "+title+'</h3><span>'+items.length+'</span></div>'+
-    (items.length?items.map(x=>'<div class="declutterItem"><div class="fileIcon">'+(x.file.type.startsWith("image/")?"🖼️":"📄")+'</div><div class="fileInfo"><div class="fileName">'+escapeHtml(x.file.name)+'</div><div class="fileReason '+cls+'">'+escapeHtml(x.reason)+" · "+formatBytes(x.file.size)+'</div></div></div>').join(""):'<div class="meta" style="padding-top:10px">Nothing here. Nice.</div>')+'</div>';
+    (items.length?items.map(x=>'<div class="declutterItem"><div class="fileIcon">'+(String(x.file.type||"").startsWith("image/")?"🖼️":"📄")+'</div><div class="fileInfo"><div class="fileName">'+escapeHtml(x.file.name)+'</div><div class="fileReason '+cls+'">'+escapeHtml(x.reason)+" · "+formatBytes(x.file.size)+'</div></div></div>').join(""):'<div class="meta" style="padding-top:10px">Nothing here. Nice.</div>')+'</div>';
   $("#declutterGroups").innerHTML=section("Probably delete","deleteBadge",groups.delete,"🗑️")+section("Review","reviewBadge",groups.review,"🟡")+section("Keep","keepBadge",groups.keep,"⭐");
 }
 $("#photoPicker").addEventListener("change",e=>handleDeclutterFiles(e.target.files));
@@ -350,7 +362,7 @@ async function enableNotifications(){
     }
     const sr = await fetch("/api/push/subscribe",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,subscription:sub.toJSON()})});
     if (!sr.ok) { const d=await sr.json().catch(()=>({})); throw new Error(d.error || "LifeOS could not save this phone."); }
-    status.textContent="Phone reminders are on 🔔"; status.className="ok"; $("#notifyTitle").textContent="Phone reminders are on 🔔"; btn.textContent="Test"; btn.onclick=testNotification;
+    status.textContent="Phone reminders are on 🔔"; status.className="ok"; localStorage.setItem("lifeos_notifications_enabled","1"); $("#notifyTitle").textContent="Phone reminders are on 🔔"; btn.textContent="Test"; btn.onclick=testNotification;
   } catch(e) { console.error(e); status.textContent=e.message || "Couldn’t enable reminders."; status.className="warn"; }
   finally { btn.disabled=false; }
 }
@@ -358,13 +370,21 @@ async function restoreNotificationState(){
   try{
     if(!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
     const standalone=window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true;
-    if(!standalone) return;
+    if(!standalone || Notification.permission!=="granted") return;
     const reg=await navigator.serviceWorker.register("/sw.js?v=6",{updateViaCache:"none"});
     await navigator.serviceWorker.ready;
-    const sub=await reg.pushManager.getSubscription();
-    if(sub && Notification.permission==="granted"){
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub && localStorage.getItem("lifeos_notifications_enabled")==="1"){
+      const cr=await fetch("/api/push/config",{cache:"no-store"});
+      if(cr.ok){
+        const config=await cr.json();
+        if(config.publicKey) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64urlToUint8Array(config.publicKey)});
+      }
+    }
+    if(sub){
       const sr=await fetch("/api/push/subscribe",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,timezone:deviceTimeZone(),subscription:sub.toJSON()})});
       if(!sr.ok)throw new Error("LifeOS couldn't restore your notification subscription.");
+      localStorage.setItem("lifeos_notifications_enabled","1");
       $("#notifyStatus").textContent="Phone reminders are on 🔔";
       $("#notifyStatus").className="ok";
       $("#notifyTitle").textContent="Phone reminders are on 🔔";
@@ -418,7 +438,7 @@ $("#tasks").addEventListener("change",async e=>{
 if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js?v=6",{updateViaCache:"none"}).catch(console.error);
 const requestedTool=new URLSearchParams(location.search).get("tool");
 if(["deadline","readeasy","replybot","declutter"].includes(requestedTool))window.openLifeOSTool(requestedTool);
-load(); loadPlan(); restoreNotificationState();
+load(); loadPlan(); restoreNotificationState(); window.addEventListener("pageshow",restoreNotificationState); document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")restoreNotificationState();});
 
 </script>
 <script>
