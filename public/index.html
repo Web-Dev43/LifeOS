@@ -116,6 +116,17 @@
       <div class="meta">🔒 Privacy first: files stay in your browser for this MVP. LifeOS only analyzes the items you choose and does not upload them.</div>
     </section>
   </section>
+
+  <section id="readeasyView" class="toolView" hidden>
+    <div class="brand">LifeOS / ReadEasy</div><h1>Make it make sense.</h1>
+    <p class="sub">Turn confusing text into something you can actually understand.</p>
+    <section class="card"><div class="empty">📖 ReadEasy is next. We’re keeping the switcher ready so all four tools live together.</div></section>
+  </section>
+  <section id="replybotView" class="toolView" hidden>
+    <div class="brand">LifeOS / ReplyBot</div><h1>Know what to say.</h1>
+    <p class="sub">Get help when you have absolutely no idea how to reply. 😭</p>
+    <section class="card"><div class="empty">💬 ReplyBot is next. The tool switcher is already ready for it.</div></section>
+  </section>
 </main>
 <script>
 (async function(){
@@ -142,16 +153,13 @@
 
 const $ = (s) => document.querySelector(s);
 const toolButtons=[...document.querySelectorAll("[data-tool]")];
-const deadlineView=$("#deadlineView"), digitalView=$("#digitalView");
+const deadlineView=$("#deadlineView"), digitalView=$("#digitalView"), readeasyView=$("#readeasyView"), replybotView=$("#replybotView");
 function switchTool(tool){
   toolButtons.forEach(b=>b.classList.toggle("active",b.dataset.tool===tool));
   deadlineView.hidden=tool!=="deadline";
   digitalView.hidden=tool!=="declutter";
-  if(tool==="readeasy"||tool==="replybot"){
-    deadlineView.hidden=true; digitalView.hidden=true;
-    alert(tool==="readeasy"?"ReadEasy is next. We’re building it soon 📖":"ReplyBot is next. We’re building it soon 💬");
-    switchTool("deadline");
-  }
+  readeasyView.hidden=tool!=="readeasy";
+  replybotView.hidden=tool!=="replybot";
 }
 toolButtons.forEach(b=>b.addEventListener("click",()=>switchTool(b.dataset.tool)));
 
