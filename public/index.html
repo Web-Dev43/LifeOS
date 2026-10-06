@@ -66,7 +66,7 @@
 <script>
 (async function(){
   try{
-    const version="2026-10-06-2";
+    const version="2026-10-06-3";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -94,6 +94,15 @@ const deviceId = (() => {
 })();
 const today = () => { const d=new Date(); return new Intl.DateTimeFormat("en-CA",{year:"numeric",month:"2-digit",day:"2-digit"}).format(d); };
 const deviceTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+const formatPlanTime = (value) => {
+  if (!value) return value;
+  const m = String(value).match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return value;
+  const h = Number(m[1]), mins = m[2];
+  const suffix = h >= 12 ? "PM" : "AM";
+  const hour = h % 12 || 12;
+  return hour + ":" + mins + " " + suffix;
+};
 const escapeHtml = (s) => String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
 const base64urlToUint8Array = (v) => {
   const padding = "=".repeat((4 - v.length % 4) % 4);
@@ -139,7 +148,7 @@ async function enableNotifications(){
     const cr = await fetch("/api/push/config",{cache:"no-store"});
     if (!cr.ok) throw new Error("Notification server error: "+cr.status);
     const config = await cr.json();
-    const reg = await navigator.serviceWorker.register("/sw.js?v=3",{updateViaCache:"none"});
+    const reg = await navigator.serviceWorker.register("/sw.js?v=4",{updateViaCache:"none"});
     await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
@@ -180,7 +189,7 @@ async function loadPlan(){
     const r=await fetch("/api/plan?deviceId="+encodeURIComponent(deviceId)+"&timeZone="+encodeURIComponent(deviceTimeZone()),{cache:"no-store"}), d=await r.json(), items=d.items||[];
     $("#planSummary").textContent=items.length ? d.totalMinutes+" min of focused work. Here’s the order LifeOS recommends." : "Nothing urgent. You’re caught up 🎉";
     $("#planTitle").textContent=items.length ? "Your next moves" : "You’re clear";
-    $("#plan").innerHTML=items.length ? items.map((t,i)=>'<div class="planItem"><div class="planNum">'+(i+1)+'</div><div class="planInfo"><div class="planTitle">'+escapeHtml(t.title)+'</div><div class="planMeta">'+escapeHtml(t.scheduledLabel)+' at '+escapeHtml(t.scheduledTime)+' · '+t.minutes+' min · Due '+escapeHtml(t.due_date)+' · '+escapeHtml(t.priority.toUpperCase())+'</div><div class="planReason">'+escapeHtml(t.reason)+'</div></div></div>').join("") : '<div class="planEmpty">No open tasks. Go enjoy the fact that your life is currently not on fire. 🔥</div>';
+    $("#plan").innerHTML=items.length ? items.map((t,i)=>'<div class="planItem"><div class="planNum">'+(i+1)+'</div><div class="planInfo"><div class="planTitle">'+escapeHtml(t.title)+'</div><div class="planMeta">'+escapeHtml(t.scheduledLabel)+' at '+escapeHtml(formatPlanTime(t.scheduledTime))+' · '+t.minutes+' min · Due '+escapeHtml(t.due_date)+' · '+escapeHtml(t.priority.toUpperCase())+'</div><div class="planReason">'+escapeHtml(t.reason)+'</div></div></div>').join("") : '<div class="planEmpty">No open tasks. Go enjoy the fact that your life is currently not on fire. 🔥</div>';
   } catch(e) { $("#planSummary").textContent="Couldn’t load the plan yet."; }
 }
 async function patchTask(id, body){ await fetch("/api/tasks/"+id,{method:"PATCH",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({...body,deviceId})}); await load(); await loadPlan(); }
