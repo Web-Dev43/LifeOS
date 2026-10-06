@@ -27,7 +27,7 @@
     .notify button{width:auto;white-space:nowrap}.planHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.plan h2{font-size:26px;margin:0 0 4px}.plan .sub{margin:0}.refresh{width:auto;padding:8px 12px;background:#0f0f15;color:#fff;border:1px solid #30303a}.planItem{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid #282831}.planItem:last-child{border-bottom:0}.planNum{font-weight:900;font-size:18px;width:24px}.planInfo{flex:1;min-width:0}.planTitle{font-weight:800}.planMeta{font-size:12px;color:#92929f;margin-top:4px}.planReason{font-size:12px;margin-top:7px;color:#c7c7d0}.planEmpty{padding:18px 0;color:#80d8a3;font-weight:700}.ok{color:#80d8a3}.warn{color:#f4ca72}
     @media(max-width:520px){h1{font-size:36px}.row{grid-template-columns:1fr}.notify{align-items:flex-start;flex-direction:column}.notify button{width:100%}}
   
-    .switcher{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:0 0 22px;padding:6px;background:#15151c;border:1px solid #292933;border-radius:16px;position:sticky;top:10px;z-index:10;backdrop-filter:blur(14px)}
+    .landing{text-align:center;padding:8vh 0 4vh}.landingBrand{font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:#9b9ba7;margin-bottom:14px}.landing h1{font-size:clamp(48px,12vw,78px);letter-spacing:-.05em;margin:0}.landingSlogan{font-size:clamp(18px,4vw,24px);color:#b9b9c4;margin:14px auto 34px;max-width:520px}.landingTools{display:grid;grid-template-columns:1fr 1fr;gap:14px;text-align:left}.landingTool{display:block;text-align:left;padding:22px;border:1px solid #30303a;border-radius:20px;background:#15151c;color:#fff;transition:transform .15s,border-color .15s}.landingTool:hover{transform:translateY(-2px);border-color:#555563}.landingTool:active{transform:scale(.98)}.landingTool .emoji{font-size:30px;display:block;margin-bottom:14px}.landingTool b{font-size:20px;display:block}.landingTool span{display:block;color:#92929f;font-size:13px;line-height:1.4;margin-top:6px}.backHome{width:auto;margin:0 0 16px;padding:8px 12px;background:#0f0f15;color:#fff;border:1px solid #30303a}.switcher{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:0 0 22px;padding:6px;background:#15151c;border:1px solid #292933;border-radius:16px;position:sticky;top:10px;z-index:10;backdrop-filter:blur(14px)}
     .tool{padding:10px 6px;background:transparent;color:#aaa;border:0;border-radius:11px;font-size:12px;font-weight:800;line-height:1.2}
     .tool.active{background:#fff;color:#0b0b0f}.tool:active{transform:scale(.98)}
     .toolView{animation:fadeIn .18s ease}.declutterChoices{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pick{display:flex;flex-direction:column;gap:7px;padding:18px;border:1px solid #30303a;border-radius:16px;background:#0f0f15;cursor:pointer}.pick>span{font-size:28px}.pick b{font-size:16px}.pick small{color:#92929f;line-height:1.35}.pick input{display:none}
@@ -39,6 +39,19 @@
 <body>
 <main>
   
+  <section id="homeView" class="landing">
+    <div class="landingBrand">LifeOS</div>
+    <h1>Get your life together.</h1>
+    <p class="landingSlogan">Your life is complicated. LifeOS helps.</p>
+    <div class="landingTools">
+      <button class="landingTool" data-home-tool="deadline"><span class="emoji">🗓️</span><b>Deadline</b><span>Knows what you should do next.</span></button>
+      <button class="landingTool" data-home-tool="readeasy"><span class="emoji">📖</span><b>ReadEasy</b><span>Makes confusing stuff make sense.</span></button>
+      <button class="landingTool" data-home-tool="replybot"><span class="emoji">💬</span><b>ReplyBot</b><span>Knows what to say when you don't.</span></button>
+      <button class="landingTool" data-home-tool="declutter"><span class="emoji">🧹</span><b>DigitalDeclutter</b><span>Gets your digital mess under control.</span></button>
+    </div>
+  </section>
+  <div id="appViews" hidden>
+  <button id="homeButton" class="backHome">← LifeOS home</button>
   <nav class="switcher" aria-label="LifeOS tools">
     <button class="tool active" data-tool="deadline">🗓️ Deadline</button>
     <button class="tool" data-tool="readeasy">📖 ReadEasy</button>
@@ -127,11 +140,12 @@
     <p class="sub">Get help when you have absolutely no idea how to reply. 😭</p>
     <section class="card"><div class="empty">💬 ReplyBot is next. The tool switcher is already ready for it.</div></section>
   </section>
+</div>
 </main>
 <script>
 (async function(){
   try{
-    const version="2026-10-06-7";
+    const version="2026-10-06-8";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -152,9 +166,13 @@
 <script>
 
 const $ = (s) => document.querySelector(s);
+const homeView=$("#homeView"), appViews=$("#appViews"), homeButton=$("#homeButton");
+const homeToolButtons=[...document.querySelectorAll("[data-home-tool]")];
 const toolButtons=[...document.querySelectorAll("[data-tool]")];
 const deadlineView=$("#deadlineView"), digitalView=$("#digitalView"), readeasyView=$("#readeasyView"), replybotView=$("#replybotView");
 function switchTool(tool){
+  homeView.hidden=true;
+  appViews.hidden=false;
   toolButtons.forEach(b=>b.classList.toggle("active",b.dataset.tool===tool));
   deadlineView.hidden=tool!=="deadline";
   digitalView.hidden=tool!=="declutter";
@@ -162,6 +180,11 @@ function switchTool(tool){
   replybotView.hidden=tool!=="replybot";
 }
 toolButtons.forEach(b=>b.addEventListener("click",()=>switchTool(b.dataset.tool)));
+homeToolButtons.forEach(b=>b.addEventListener("click",()=>switchTool(b.dataset.homeTool)));
+homeButton.addEventListener("click",()=>{
+  appViews.hidden=true;
+  homeView.hidden=false;
+});
 
 const formatBytes=(n)=>{if(n<1024)return n+" B";if(n<1048576)return (n/1024).toFixed(1)+" KB";return (n/1048576).toFixed(1)+" MB";};
 function analyzeDeclutter(files){
