@@ -168,7 +168,7 @@ window.openLifeOSHome=function(){
 <script>
 (async function(){
   try{
-    const version="2026-10-06-17";
+    const version="2026-10-06-18";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -237,18 +237,11 @@ function analyzeDeclutter(files){
     seen.set(key,arr);
   });
 
-  const importantWords=["resume","cv","tax","passport","license","licence","medical","school","assignment","homework","project","contract","receipt","invoice","certificate","important","final","portfolio","application","transcript","insurance","lease","rent","bank","budget"];
-  const junkPatterns=[
-    /^untitled(?: \(\d+\))?/i,
-    /^document(?: \(\d+\))?/i,
-    /^file(?: \(\d+\))?/i,
-    /^image(?: \(\d+\))?/i,
-    /^copy(?: \(\d+\))?/i,
-    /^download(?: \(\d+\))?/i,
-    /^img[_ -]?\d+/i,
-    /^dsc[_ -]?\d+/i,
-    /^vid[_ -]?\d+/i
-  ];
+  const important=/resume|cv|tax|passport|license|licence|medical|school|assignment|homework|project|contract|receipt|invoice|certificate|important|final|portfolio|application|transcript|insurance|lease|rent|bank|budget/i;
+  const temp=/\.tmp$|\.temp$|^~|\.crdownload$|\.part$|\.download$/i;
+  const junk=/^untitled(?: \(\d+\))?|^document(?: \(\d+\))?|^file(?: \(\d+\))?|^image(?: \(\d+\))?|^copy(?: \(\d+\))?|^download(?: \(\d+\))?|^img[_ -]?\d+|^dsc[_ -]?\d+|^vid[_ -]?\d+/i;
+  const screenshot=/screenshot|screen.?shot|screen recording/i;
+  const archive=/\.(zip|rar|7z|dmg|pkg|exe|msi)$/i;
 
   list.forEach(item=>{
     const name=item.name.toLowerCase();
@@ -256,52 +249,49 @@ function analyzeDeclutter(files){
     const duplicateGroup=seen.get(name+"|"+item.size)||[];
     const isDuplicate=duplicateGroup.length>1;
     const newest=isDuplicate && item.lastModified===duplicateGroup.reduce((latest,x)=>Math.max(latest,x.lastModified),0);
-    const isImportant=importantWords.some(word=>name.includes(word));
-    const isJunkName=junkPatterns.some(pattern=>pattern.test(name));
-    const screenshot=/screenshot|screen.?shot|screen recording/i.test(name);
-    const temp=/\.tmp$|\.temp$|^~|\.crdownload$|\.part$|\.download$/i.test(name);
-    const oldDownload=/download|downloads/i.test(name)&&ageDays>60;
-    const veryOld=ageDays>730;
-    const old=ageDays>365;
+    const media=/^(image|video|audio)\//i.test(item.type);
+    const isImportant=important.test(name);
+    const isTemp=temp.test(name);
+    const isJunk=junk.test(name);
+    const isScreenshot=screenshot.test(name);
+    const isArchive=archive.test(name);
     const huge=item.size>500*1024*1024;
     const large=item.size>100*1024*1024;
-    const media=/^(image|video|audio)\//i.test(item.type);
-    const archive=/\.(zip|rar|7z|dmg|pkg|exe|msi)$/i.test(name);
 
-    let bucket="review";
-    let reason="LifeOS isn't sure. Give this one a quick look.";
+    // Score evidence instead of using one-rule-fits-all classification.
+    // Negative = likely worth keeping. Positive = likely clutter.
+    let score=0;
+    const reasons=[];
 
-    if(temp){
+    if(isTemp){ score+=10; reasons.push("temporary/incomplete file"); }
+    if(isDuplicate&&!newest){ score+=9; reasons.push("duplicate"); }
+    if(isDuplicate&&newest){ score-=2; reasons.push("newest copy"); }
+    if(isImportant){ score-=5; reasons.push("important-looking name"); }
+    if(ageDays<=30){ score-=2; reasons.push("recently modified"); }
+    else if(ageDays>730){ score+=4; reasons.push("over 2 years old"); }
+    else if(ageDays>365){ score+=2; reasons.push("over a year old"); }
+
+    if(isScreenshot&&ageDays>30){ score+=3; reasons.push("older screenshot"); }
+    if(isJunk){ score+=1; reasons.push("generic filename"); }
+    if(/download|downloads/i.test(name)&&ageDays>60){ score+=4; reasons.push("old download"); }
+    if(isArchive&&ageDays>180){ score+=3; reasons.push("old archive/installer"); }
+    if(huge&&ageDays>30){ score+=4; reasons.push("very large file"); }
+    else if(large&&ageDays>365){ score+=2; reasons.push("large old file"); }
+    if(media&&ageDays>365&&!isImportant){ score+=2; reasons.push("old media"); }
+
+    let bucket="keep";
+    let reason="Looks fine. LifeOS doesn't see a strong reason to remove it.";
+
+    if(score>=9){
       bucket="delete";
-      reason="Looks like a temporary or incomplete file.";
-    }else if(isDuplicate&&!newest){
-      bucket="delete";
-      reason="Older duplicate of another selected file with the same name and size.";
-    }else if(isDuplicate&&newest){
-      bucket="keep";
-      reason="Newest copy of a duplicate group.";
-    }else if(screenshot&&ageDays>30){
-      reason="Older screenshot that may no longer be useful.";
-    }else if(oldDownload){
-      reason="Old download. You may not need it anymore.";
-    }else if(isJunkName){
-      reason="Generic or camera-generated name. Worth checking.";
-    }else if(archive&&ageDays>180){
-      reason="Old installer/archive that may be taking up space.";
-    }else if(huge&&ageDays>90){
-      reason="Very large file that hasn't been touched recently.";
-    }else if(large&&old){
-      reason="Large file that hasn't been touched in over a year.";
-    }else if(veryOld&&!isImportant){
-      reason="More than 2 years old without an obvious important name.";
-    }else if(old&&media&&!isImportant){
-      reason="Older photo, video, or audio file worth reviewing.";
+      reason=reasons.slice(0,2).map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join(" · ")+".";
+    }else if(score>=3){
+      bucket="review";
+      reason=reasons.slice(0,2).map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join(" · ")+". Worth a quick look.";
     }else if(isImportant){
-      bucket="keep";
-      reason="The name suggests this could be important.";
+      reason="Looks important based on the filename, so LifeOS is keeping it.";
     }else if(ageDays<=30){
-      bucket="keep";
-      reason="Recently modified. Probably still relevant.";
+      reason="Recently modified, so LifeOS is treating it as useful.";
     }
 
     groups[bucket].push({file:item,reason});
