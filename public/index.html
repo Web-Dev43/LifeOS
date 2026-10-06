@@ -519,6 +519,7 @@ load(); loadPlan(); restoreNotificationState(); window.addEventListener("pagesho
       if(!sr.ok)throw new Error(data.error||"LifeOS couldn't save this phone.");
       if(status){status.textContent="Phone reminders are on 🔔";status.className="ok"}
       if(title)title.textContent="Phone reminders are on 🔔";
+      localStorage.setItem("lifeos_notifications_enabled","1");
       if(btn){btn.textContent="Test";btn.onclick=window.testLifeOSNotification}
     }catch(error){
       console.error("LifeOS notifications failed",error);
