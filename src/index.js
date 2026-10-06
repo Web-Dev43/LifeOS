@@ -1,4 +1,5 @@
 import { sendPushNotification } from "@mmmike/web-push/send";
+import { generateVapidKeys } from "@mmmike/web-push/vapid";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -43,12 +44,17 @@ function hourInTimeZone(date, timeZone) {
   }).format(date));
 }
 
+async function getVapid(env) {
+  const existing = await env.DB.prepare("SELECT public_key, private_key FROM vapid_keys WHERE id = 1").first();
+  if (existing) return { subject: "mailto:lifeos@example.com", publicKey: existing.public_key, privateKey: existing.private_key };
+  const keys = await generateVapidKeys();
+  await env.DB.prepare("INSERT OR IGNORE INTO vapid_keys (id, public_key, private_key) VALUES (1, ?, ?)").bind(keys.publicKey, keys.privateKey).run();
+  const saved = await env.DB.prepare("SELECT public_key, private_key FROM vapid_keys WHERE id = 1").first();
+  return { subject: "mailto:lifeos@example.com", publicKey: saved.public_key, privateKey: saved.private_key };
+}
+
 async function sendToSubscription(env, row, payload) {
-  const vapid = {
-    subject: env.VAPID_SUBJECT,
-    publicKey: env.VAPID_PUBLIC_KEY,
-    privateKey: env.VAPID_PRIVATE_KEY
-  };
+  const vapid = await getVapid(env);
   return sendPushNotification(
     {
       endpoint: row.endpoint,
@@ -140,7 +146,8 @@ export default {
     if (url.pathname.startsWith("/api/")) {
       try {
         if (request.method === "GET" && url.pathname === "/api/push/config") {
-          return jsonCors({ publicKey: env.VAPID_PUBLIC_KEY });
+          const vapid = await getVapid(env);
+          return jsonCors({ publicKey: vapid.publicKey });
         }
 
         if (request.method === "POST" && url.pathname === "/api/push/subscribe") {
