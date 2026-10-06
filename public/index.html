@@ -92,7 +92,8 @@ const deviceId = (() => {
   if (!id) { id = crypto.randomUUID(); localStorage.setItem("lifeos_device_id", id); }
   return id;
 })();
-const today = () => new Date().toISOString().slice(0,10);
+const today = () => { const d=new Date(); return new Intl.DateTimeFormat("en-CA",{year:"numeric",month:"2-digit",day:"2-digit"}).format(d); };
+const deviceTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 const escapeHtml = (s) => String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
 const base64urlToUint8Array = (v) => {
   const padding = "=".repeat((4 - v.length % 4) % 4);
@@ -159,10 +160,10 @@ async function testNotification(){
 }
 async function loadPlan(){
   try {
-    const r=await fetch("/api/plan?deviceId="+encodeURIComponent(deviceId),{cache:"no-store"}), d=await r.json(), items=d.items||[];
+    const r=await fetch("/api/plan?deviceId="+encodeURIComponent(deviceId)+"&timeZone="+encodeURIComponent(deviceTimeZone()),{cache:"no-store"}), d=await r.json(), items=d.items||[];
     $("#planSummary").textContent=items.length ? d.totalMinutes+" min of focused work. Here’s the order LifeOS recommends." : "Nothing urgent. You’re caught up 🎉";
     $("#planTitle").textContent=items.length ? "Your next moves" : "You’re clear";
-    $("#plan").innerHTML=items.length ? items.map((t,i)=>'<div class="planItem"><div class="planNum">'+(i+1)+'</div><div class="planInfo"><div class="planTitle">'+escapeHtml(t.title)+'</div><div class="planMeta">'+t.minutes+' min · '+escapeHtml(t.due_date)+' · '+escapeHtml(t.priority.toUpperCase())+'</div><div class="planReason">'+escapeHtml(t.reason)+'</div></div></div>').join("") : '<div class="planEmpty">No open tasks. Go enjoy the fact that your life is currently not on fire. 🔥</div>';
+    $("#plan").innerHTML=items.length ? items.map((t,i)=>'<div class="planItem"><div class="planNum">'+(i+1)+'</div><div class="planInfo"><div class="planTitle">'+escapeHtml(t.title)+'</div><div class="planMeta">'+escapeHtml(t.scheduledLabel)+' at '+escapeHtml(t.scheduledTime)+' · '+t.minutes+' min · Due '+escapeHtml(t.due_date)+' · '+escapeHtml(t.priority.toUpperCase())+'</div><div class="planReason">'+escapeHtml(t.reason)+'</div></div></div>').join("") : '<div class="planEmpty">No open tasks. Go enjoy the fact that your life is currently not on fire. 🔥</div>';
   } catch(e) { $("#planSummary").textContent="Couldn’t load the plan yet."; }
 }
 async function patchTask(id, body){ await fetch("/api/tasks/"+id,{method:"PATCH",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({...body,deviceId})}); await load(); await loadPlan(); }
