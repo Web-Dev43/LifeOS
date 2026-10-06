@@ -340,7 +340,7 @@ async function enableNotifications(){
     const cr = await fetch("/api/push/config",{cache:"no-store"});
     if (!cr.ok) throw new Error("Notification server error: "+cr.status);
     const config = await cr.json();
-    const reg = await navigator.serviceWorker.register("/sw.js?v=5",{updateViaCache:"none"});
+    const reg = await navigator.serviceWorker.register("/sw.js?v=6",{updateViaCache:"none"});
     await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
@@ -420,6 +420,116 @@ const requestedTool=new URLSearchParams(location.search).get("tool");
 if(["deadline","readeasy","replybot","declutter"].includes(requestedTool))window.openLifeOSTool(requestedTool);
 load(); loadPlan(); restoreNotificationState();
 
+</script>
+<script>
+/* LifeOS reliability layer: keeps critical iPhone actions alive even if another app script fails. */
+(function(){
+  function byId(id){return document.getElementById(id)}
+  function deviceId(){
+    let id=localStorage.getItem("lifeos_device_id");
+    if(!id){id=(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random());localStorage.setItem("lifeos_device_id",id)}
+    return id;
+  }
+  function base64urlToBytes(v){
+    const padding="=".repeat((4-v.length%4)%4);
+    const b=(v+padding).replaceAll("-","+").replaceAll("_","/");
+    return Uint8Array.from(atob(b),c=>c.charCodeAt(0));
+  }
+
+  function bindFilePicker(id){
+    const input=byId(id);
+    if(!input||input.dataset.lifeosBound==="1")return;
+    input.dataset.lifeosBound="1";
+    input.addEventListener("change",function(){
+      const files=this.files;
+      const results=byId("declutterResults"),title=byId("declutterTitle"),summary=byId("declutterSummary"),groups=byId("declutterGroups");
+      if(!files||!files.length){
+        if(results)results.hidden=false;
+        if(title)title.textContent="No files selected";
+        if(summary)summary.textContent="LifeOS didn't receive any files. Try selecting them again.";
+        return;
+      }
+      if(results)results.hidden=false;
+      if(title)title.textContent="Checking "+files.length+" item"+(files.length===1?"":"s")+"…";
+      if(summary)summary.textContent="Analyzing your selection locally. Nothing is uploaded.";
+      if(groups)groups.innerHTML='<div class="meta" style="padding:14px 0">Analyzing now…</div>';
+      setTimeout(function(){
+        try{
+          if(typeof window.handleDeclutterFiles==="function")window.handleDeclutterFiles(files);
+          else if(typeof window.analyzeDeclutter==="function")window.analyzeDeclutter(files);
+          else throw new Error("DigitalDeclutter analyzer is unavailable.");
+        }catch(error){
+          console.error("DigitalDeclutter failed",error);
+          if(title)title.textContent="Couldn't analyze those files";
+          if(summary)summary.textContent="LifeOS hit an error while checking the selection. Try choosing the files again.";
+          if(groups)groups.innerHTML='<div class="meta warn" style="padding:14px 0">Something went wrong while reading the selected files.</div>';
+        }
+      },0);
+    });
+  }
+
+  window.enableLifeOSNotifications=async function(){
+    const btn=byId("notifyBtn"),status=byId("notifyStatus"),title=byId("notifyTitle");
+    if(btn)btn.disabled=true;
+    if(status){status.textContent="Turning reminders on…";status.className=""}
+    try{
+      if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window))
+        throw new Error("Notifications aren't available in this browser.");
+      const standalone=window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone===true;
+      if(!standalone)throw new Error("Add LifeOS to your Home Screen first, then open it from the icon.");
+      if(Notification.permission==="denied")throw new Error("Notifications are blocked. Check Settings → Notifications → LifeOS.");
+      const cr=await fetch("/api/push/config",{cache:"no-store"});
+      if(!cr.ok)throw new Error("LifeOS notification server returned "+cr.status+".");
+      const config=await cr.json();
+      if(!config.publicKey)throw new Error("LifeOS couldn't get its notification key.");
+      const reg=await navigator.serviceWorker.register("/sw.js?v=6",{updateViaCache:"none"});
+      await navigator.serviceWorker.ready;
+      let sub=await reg.pushManager.getSubscription();
+      if(!sub){
+        const permission=Notification.permission==="default"?await Notification.requestPermission():Notification.permission;
+        if(permission!=="granted")throw new Error("Notification permission wasn't granted.");
+        sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64urlToBytes(config.publicKey)});
+      }
+      const sr=await fetch("/api/push/subscribe",{
+        method:"POST",
+        headers:{"content-type":"application/json","x-device-id":deviceId()},
+        body:JSON.stringify({deviceId:deviceId(),timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC",subscription:sub.toJSON()})
+      });
+      const data=await sr.json().catch(()=>({}));
+      if(!sr.ok)throw new Error(data.error||"LifeOS couldn't save this phone.");
+      if(status){status.textContent="Phone reminders are on 🔔";status.className="ok"}
+      if(title)title.textContent="Phone reminders are on 🔔";
+      if(btn){btn.textContent="Test";btn.onclick=window.testLifeOSNotification}
+    }catch(error){
+      console.error("LifeOS notifications failed",error);
+      if(status){status.textContent=error.message||"Couldn't turn on reminders.";status.className="warn"}
+    }finally{if(btn)btn.disabled=false}
+  };
+
+  window.testLifeOSNotification=async function(){
+    const btn=byId("notifyBtn"),status=byId("notifyStatus");
+    if(btn)btn.disabled=true;
+    try{
+      const r=await fetch("/api/push/test",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId()},body:JSON.stringify({deviceId:deviceId()})});
+      const data=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(data.error||"LifeOS couldn't send the test notification.");
+      if(status){status.textContent="Test notification sent 🔔";status.className="ok"}
+    }catch(error){
+      if(status){status.textContent=error.message||"Couldn't send the test notification.";status.className="warn"}
+    }finally{if(btn)btn.disabled=false}
+  };
+
+  function bind(){
+    bindFilePicker("photoPicker");
+    bindFilePicker("filePicker");
+    const btn=byId("notifyBtn");
+    if(btn){
+      btn.onclick=window.enableLifeOSNotifications;
+      if(btn.textContent.trim()==="Turn on")btn.disabled=false;
+    }
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",bind,{once:true});else bind();
+})();
 </script>
 </body>
 </html>
