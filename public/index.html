@@ -168,7 +168,7 @@ window.openLifeOSHome=function(){
 <script>
 (async function(){
   try{
-    const version="2026-10-06-11";
+    const version="2026-10-06-12";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -359,7 +359,7 @@ async function restoreNotificationState(){
     if(!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
     const standalone=window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true;
     if(!standalone) return;
-    const reg=await navigator.serviceWorker.register("/sw.js?v=5",{updateViaCache:"none"});
+    const reg=await navigator.serviceWorker.register("/sw.js?v=6",{updateViaCache:"none"});
     await navigator.serviceWorker.ready;
     const sub=await reg.pushManager.getSubscription();
     if(sub && Notification.permission==="granted"){
