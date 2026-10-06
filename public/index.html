@@ -26,11 +26,26 @@
     .notify{display:flex;align-items:center;justify-content:space-between;gap:12px}.notify-copy{min-width:0}.notify-copy b{display:block}.notify-copy span{color:#9696a2;font-size:12px}
     .notify button{width:auto;white-space:nowrap}.planHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.plan h2{font-size:26px;margin:0 0 4px}.plan .sub{margin:0}.refresh{width:auto;padding:8px 12px;background:#0f0f15;color:#fff;border:1px solid #30303a}.planItem{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid #282831}.planItem:last-child{border-bottom:0}.planNum{font-weight:900;font-size:18px;width:24px}.planInfo{flex:1;min-width:0}.planTitle{font-weight:800}.planMeta{font-size:12px;color:#92929f;margin-top:4px}.planReason{font-size:12px;margin-top:7px;color:#c7c7d0}.planEmpty{padding:18px 0;color:#80d8a3;font-weight:700}.ok{color:#80d8a3}.warn{color:#f4ca72}
     @media(max-width:520px){h1{font-size:36px}.row{grid-template-columns:1fr}.notify{align-items:flex-start;flex-direction:column}.notify button{width:100%}}
-  </style>
+  
+    .switcher{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:0 0 22px;padding:6px;background:#15151c;border:1px solid #292933;border-radius:16px;position:sticky;top:10px;z-index:10;backdrop-filter:blur(14px)}
+    .tool{padding:10px 6px;background:transparent;color:#aaa;border:0;border-radius:11px;font-size:12px;font-weight:800;line-height:1.2}
+    .tool.active{background:#fff;color:#0b0b0f}.tool:active{transform:scale(.98)}
+    .toolView{animation:fadeIn .18s ease}.declutterChoices{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pick{display:flex;flex-direction:column;gap:7px;padding:18px;border:1px solid #30303a;border-radius:16px;background:#0f0f15;cursor:pointer}.pick>span{font-size:28px}.pick b{font-size:16px}.pick small{color:#92929f;line-height:1.35}.pick input{display:none}
+    .declutterGroup{padding:16px 0;border-bottom:1px solid #282831}.declutterGroup:last-child{border-bottom:0}.declutterHead{display:flex;justify-content:space-between;gap:10px;align-items:center}.declutterHead h3{margin:0;font-size:18px}.declutterHead span{font-size:12px;color:#92929f}.declutterItem{display:flex;gap:10px;padding:11px 0;border-bottom:1px solid #22222b}.declutterItem:last-child{border-bottom:0}.fileIcon{font-size:20px}.fileInfo{min-width:0;flex:1}.fileName{font-weight:700;overflow-wrap:anywhere}.fileReason{font-size:12px;color:#92929f;margin-top:3px}.deleteBadge{color:#ff8b8b}.reviewBadge{color:#f4ca72}.keepBadge{color:#80d8a3}
+    @keyframes fadeIn{from{opacity:.5;transform:translateY(3px)}to{opacity:1;transform:none}}
+    @media(max-width:520px){.switcher{grid-template-columns:repeat(2,1fr)}.declutterChoices{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 <main>
-  <div class="brand">LifeOS / Deadline</div>
+  
+  <nav class="switcher" aria-label="LifeOS tools">
+    <button class="tool active" data-tool="deadline">🗓️ Deadline</button>
+    <button class="tool" data-tool="readeasy">📖 ReadEasy</button>
+    <button class="tool" data-tool="replybot">💬 ReplyBot</button>
+    <button class="tool" data-tool="declutter">🧹 DigitalDeclutter</button>
+  </nav>
+<div id="deadlineView"><div class="brand">LifeOS / Deadline</div>
   <h1>Get ahead of it.</h1>
   <p class="sub">Your assignments, without the last-minute boss battle.</p>
 
@@ -62,11 +77,50 @@
   <section class="card">
     <div id="tasks"></div>
   </section>
+</div>
+  <section id="digitalView" class="toolView" hidden>
+    <div class="brand">LifeOS / DigitalDeclutter</div>
+    <h1>Clean up the mess.</h1>
+    <p class="sub">Pick some photos or files. LifeOS will sort them into what probably needs attention.</p>
+
+    <section class="card">
+      <div class="declutterChoices">
+        <label class="pick">
+          <span>📸</span>
+          <b>Choose photos</b>
+          <small>Pick screenshots, duplicates, or old photos to review.</small>
+          <input id="photoPicker" type="file" accept="image/*" multiple>
+        </label>
+        <label class="pick">
+          <span>📁</span>
+          <b>Choose files</b>
+          <small>Pick documents, downloads, or other files to analyze.</small>
+          <input id="filePicker" type="file" multiple>
+        </label>
+      </div>
+    </section>
+
+    <section class="card" id="declutterResults" hidden>
+      <div class="planHead">
+        <div>
+          <div class="brand">Digital checkup</div>
+          <h2 id="declutterTitle">Your digital mess</h2>
+          <p id="declutterSummary" class="sub">LifeOS is checking what you selected.</p>
+        </div>
+        <button class="refresh" id="clearDeclutter">Clear</button>
+      </div>
+      <div id="declutterGroups"></div>
+    </section>
+
+    <section class="card">
+      <div class="meta">🔒 Privacy first: files stay in your browser for this MVP. LifeOS only analyzes the items you choose and does not upload them.</div>
+    </section>
+  </section>
 </main>
 <script>
 (async function(){
   try{
-    const version="2026-10-06-3";
+    const version="2026-10-06-4";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -87,6 +141,60 @@
 <script>
 
 const $ = (s) => document.querySelector(s);
+const toolButtons=[...document.querySelectorAll("[data-tool]")];
+const deadlineView=$("#deadlineView"), digitalView=$("#digitalView");
+function switchTool(tool){
+  toolButtons.forEach(b=>b.classList.toggle("active",b.dataset.tool===tool));
+  deadlineView.hidden=tool!=="deadline";
+  digitalView.hidden=tool!=="declutter";
+  if(tool==="readeasy"||tool==="replybot"){
+    deadlineView.hidden=true; digitalView.hidden=true;
+    alert(tool==="readeasy"?"ReadEasy is next. We’re building it soon 📖":"ReplyBot is next. We’re building it soon 💬");
+    switchTool("deadline");
+  }
+}
+toolButtons.forEach(b=>b.addEventListener("click",()=>switchTool(b.dataset.tool)));
+
+const formatBytes=(n)=>{if(n<1024)return n+" B";if(n<1048576)return (n/1024).toFixed(1)+" KB";return (n/1048576).toFixed(1)+" MB";};
+function analyzeDeclutter(files){
+  const list=[...files];
+  const seen=new Map();
+  list.forEach(f=>{const k=f.name.toLowerCase()+"|"+f.size;seen.set(k,(seen.get(k)||0)+1);});
+  const groups={delete:[],review:[],keep:[]};
+  const now=Date.now();
+  list.forEach(f=>{
+    const name=f.name.toLowerCase();
+    const duplicate=seen.get(name+"|"+f.size)>1;
+    const ageDays=Math.floor((now-f.lastModified)/86400000);
+    const screenshot=/screenshot|screen.?shot|screen recording/.test(name);
+    const temp=/\.tmp$|\.temp$|^~|\.crdownload$|\.part$/.test(name);
+    const download=/download|downloads/.test(name);
+    const isImage=f.type.startsWith("image/");
+    let bucket="keep",reason="Looks like something worth keeping.";
+    if(duplicate){bucket="delete";reason="Duplicate filename and size in this selection.";}
+    else if(temp){bucket="delete";reason="Looks like a temporary or incomplete file.";}
+    else if(screenshot){bucket="review";reason="Looks like a screenshot. Keep it if you still need it.";}
+    else if(download&&ageDays>90){bucket="review";reason="Looks like an old download. Check it before keeping it.";}
+    else if(isImage&&ageDays>730){bucket="review";reason="This photo is more than 2 years old. Worth a quick review.";}
+    groups[bucket].push({file:f,reason});
+  });
+  renderDeclutter(groups);
+}
+function renderDeclutter(groups){
+  const all=[...groups.delete,...groups.review,...groups.keep];
+  $("#declutterResults").hidden=false;
+  $("#declutterTitle").textContent=all.length+" item"+(all.length===1?"":"s")+" checked";
+  $("#declutterSummary").textContent=groups.delete.length+" probably delete · "+groups.review.length+" review · "+groups.keep.length+" keep";
+  const section=(title,cls,items,icon)=>'<div class="declutterGroup"><div class="declutterHead"><h3>'+icon+" "+title+'</h3><span>'+items.length+'</span></div>'+
+    (items.length?items.map(x=>'<div class="declutterItem"><div class="fileIcon">'+(x.file.type.startsWith("image/")?"🖼️":"📄")+'</div><div class="fileInfo"><div class="fileName">'+escapeHtml(x.file.name)+'</div><div class="fileReason '+cls+'">'+escapeHtml(x.reason)+" · "+formatBytes(x.file.size)+'</div></div></div>').join(""):'<div class="meta" style="padding-top:10px">Nothing here. Nice.</div>')+'</div>';
+  $("#declutterGroups").innerHTML=section("Probably delete","deleteBadge",groups.delete,"🗑️")+section("Review","reviewBadge",groups.review,"🟡")+section("Keep","keepBadge",groups.keep,"⭐");
+}
+$("#photoPicker").addEventListener("change",e=>analyzeDeclutter(e.target.files));
+$("#filePicker").addEventListener("change",e=>analyzeDeclutter(e.target.files));
+$("#clearDeclutter").addEventListener("click",()=>{
+  $("#photoPicker").value="";$("#filePicker").value="";$("#declutterResults").hidden=true;$("#declutterGroups").innerHTML="";
+});
+
 const deviceId = (() => {
   let id = localStorage.getItem("lifeos_device_id");
   if (!id) { id = crypto.randomUUID(); localStorage.setItem("lifeos_device_id", id); }
