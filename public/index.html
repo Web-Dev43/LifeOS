@@ -168,7 +168,7 @@ window.openLifeOSHome=function(){
 <script>
 (async function(){
   try{
-    const version="2026-10-06-18";
+    const version="2026-10-06-19";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -238,6 +238,7 @@ function analyzeDeclutter(files){
   });
 
   const important=/resume|cv|tax|passport|license|licence|medical|school|assignment|homework|project|contract|receipt|invoice|certificate|important|final|portfolio|application|transcript|insurance|lease|rent|bank|budget/i;
+  const memory=/memory|memories|vacation|holiday|trip|travel|birthday|family|friend|friends|wedding|graduation|christmas|thanksgiving|baby|kids|child|dog|cat|pet|beach|sunset|concert|party|celebration|reunion|anniversary|first|favorite|favourite/i;
   const temp=/\.tmp$|\.temp$|^~|\.crdownload$|\.part$|\.download$/i;
   const junk=/^untitled(?: \(\d+\))?|^document(?: \(\d+\))?|^file(?: \(\d+\))?|^image(?: \(\d+\))?|^copy(?: \(\d+\))?|^download(?: \(\d+\))?|^img[_ -]?\d+|^dsc[_ -]?\d+|^vid[_ -]?\d+/i;
   const screenshot=/screenshot|screen.?shot|screen recording/i;
@@ -250,7 +251,9 @@ function analyzeDeclutter(files){
     const isDuplicate=duplicateGroup.length>1;
     const newest=isDuplicate && item.lastModified===duplicateGroup.reduce((latest,x)=>Math.max(latest,x.lastModified),0);
     const media=/^(image|video|audio)\//i.test(item.type);
+    const photoOrVideo=/^(image|video)\//i.test(item.type) || /\.(jpe?g|png|heic|heif|gif|webp|mov|mp4|m4v|avi|webm)$/i.test(name);
     const isImportant=important.test(name);
+    const isMemory=memory.test(name);
     const isTemp=temp.test(name);
     const isJunk=junk.test(name);
     const isScreenshot=screenshot.test(name);
@@ -258,26 +261,55 @@ function analyzeDeclutter(files){
     const huge=item.size>500*1024*1024;
     const large=item.size>100*1024*1024;
 
-    // Score evidence instead of using one-rule-fits-all classification.
-    // Negative = likely worth keeping. Positive = likely clutter.
-    let score=0;
+    /*
+      Safety rule: LifeOS should never tell someone to delete a personal
+      photo/video just because it is old or has a generic camera filename.
+      "Delete" is reserved for high-confidence clutter.
+    */
+    if(isTemp){
+      groups.delete.push({file:item,reason:"Temporary or incomplete file. Safe to remove if you don't need the unfinished download."});
+      return;
+    }
+
+    if(isDuplicate&&!newest){
+      groups.delete.push({file:item,reason:"Exact duplicate of another selected file with the same name and size. Keep the newest copy."});
+      return;
+    }
+
+    if(isDuplicate&&newest){
+      groups.keep.push({file:item,reason:"Newest copy of a duplicate group."});
+      return;
+    }
+
+    // Personal memories are protected. Even if old or large, don't recommend deleting them.
+    if(photoOrVideo && (isMemory || !isImportant)){
+      if(isMemory){
+        groups.keep.push({file:item,reason:"Looks like a personal memory. LifeOS will protect it instead of recommending deletion."});
+      }else if(isScreenshot && ageDays>30){
+        groups.review.push({file:item,reason:"Older screenshot. It may be clutter, but LifeOS won't delete it automatically."});
+      }else if(huge&&ageDays>90){
+        groups.review.push({file:item,reason:"Very large personal photo/video. Review it manually before deciding what to do."});
+      }else{
+        groups.keep.push({file:item,reason:"Personal photo/video. Age or filename alone isn't enough to call a memory clutter."});
+      }
+      return;
+    }
+
+    // Documents and other non-media files get more active cleanup suggestions.
     const reasons=[];
+    let score=0;
 
-    if(isTemp){ score+=10; reasons.push("temporary/incomplete file"); }
-    if(isDuplicate&&!newest){ score+=9; reasons.push("duplicate"); }
-    if(isDuplicate&&newest){ score-=2; reasons.push("newest copy"); }
-    if(isImportant){ score-=5; reasons.push("important-looking name"); }
-    if(ageDays<=30){ score-=2; reasons.push("recently modified"); }
-    else if(ageDays>730){ score+=4; reasons.push("over 2 years old"); }
-    else if(ageDays>365){ score+=2; reasons.push("over a year old"); }
-
-    if(isScreenshot&&ageDays>30){ score+=3; reasons.push("older screenshot"); }
-    if(isJunk){ score+=1; reasons.push("generic filename"); }
-    if(/download|downloads/i.test(name)&&ageDays>60){ score+=4; reasons.push("old download"); }
-    if(isArchive&&ageDays>180){ score+=3; reasons.push("old archive/installer"); }
-    if(huge&&ageDays>30){ score+=4; reasons.push("very large file"); }
-    else if(large&&ageDays>365){ score+=2; reasons.push("large old file"); }
-    if(media&&ageDays>365&&!isImportant){ score+=2; reasons.push("old media"); }
+    if(isImportant){score-=5;reasons.push("important-looking filename");}
+    if(ageDays<=30){score-=2;reasons.push("recently modified");}
+    if(ageDays>730){score+=4;reasons.push("over 2 years old");}
+    else if(ageDays>365){score+=2;reasons.push("over a year old");}
+    if(isScreenshot&&ageDays>30){score+=3;reasons.push("older screenshot");}
+    if(isJunk){score+=1;reasons.push("generic filename");}
+    if(/download|downloads/i.test(name)&&ageDays>60){score+=4;reasons.push("old download");}
+    if(isArchive&&ageDays>180){score+=3;reasons.push("old archive or installer");}
+    if(huge&&ageDays>30){score+=4;reasons.push("very large file");}
+    else if(large&&ageDays>365){score+=2;reasons.push("large old file");}
+    if(media&&ageDays>365&&!isImportant){score+=2;reasons.push("old media");}
 
     let bucket="keep";
     let reason="Looks fine. LifeOS doesn't see a strong reason to remove it.";
@@ -289,14 +321,12 @@ function analyzeDeclutter(files){
       bucket="review";
       reason=reasons.slice(0,2).map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join(" · ")+". Worth a quick look.";
     }else if(isImportant){
-      reason="Looks important based on the filename, so LifeOS is keeping it.";
+      reason="Looks important based on the filename, so LifeOS is protecting it.";
     }else if(ageDays<=30){
       reason="Recently modified, so LifeOS is treating it as useful.";
-    }
 
     groups[bucket].push({file:item,reason});
   });
-
   renderDeclutter(groups);
 }
 function renderDeclutter(groups){
