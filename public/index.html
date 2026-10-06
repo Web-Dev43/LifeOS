@@ -126,36 +126,45 @@ function render(tasks){
 function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 
 async function enableNotifications(){
-  const status=$("#notifyStatus"), btn=$("#notifyBtn");
-  if(!window.isSecureContext){status.textContent="Notifications need a secure connection.";status.className="warn";return}
-  if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window)){
-    status.textContent="Push notifications aren’t available here. Open LifeOS from its Home Screen app.";status.className="warn";return;
-  }
+  const status=$("#notifyStatus"),btn=$("#notifyBtn");
+  const standalone=window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone===true;
+  const permission=("Notification" in window)?Notification.permission:"unsupported";
+  const pushAvailable=("PushManager" in window);
+  const swAvailable=("serviceWorker" in navigator);
   btn.disabled=true;
   try{
-    status.textContent="Setting up phone reminders…";status.className="";
-    const configResponse=await fetch("/api/push/config");
-    if(!configResponse.ok)throw new Error("Could not load notification settings.");
-    const config=await configResponse.json();
-    if(!config.publicKey)throw new Error("LifeOS notification key is missing.");
-    const registration=await navigator.serviceWorker.register("/sw.js");
-    await navigator.serviceWorker.ready;
-    let permission=Notification.permission;
-    if(permission==="default")permission=await Notification.requestPermission();
-    if(permission!=="granted"){
-      status.textContent=permission==="denied"?"Notifications are blocked for LifeOS. Open iPhone Settings → Notifications → LifeOS and allow notifications.":"Notification permission was not granted.";
-      status.className="warn";return;
+    status.textContent="Checking LifeOS on this iPhone…";status.className="";
+    if(!standalone){
+      throw new Error("LifeOS is not running as a Home Screen app. Open the LifeOS icon on your Home Screen, not Safari.");
     }
-    const existing=await registration.pushManager.getSubscription();
-    const subscription=existing||await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64urlToUint8Array(config.publicKey)});
-    const response=await fetch("/api/push/subscribe",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,subscription:subscription.toJSON()})});
-    if(!response.ok)throw new Error((await response.json().catch(()=>({}))).error||"LifeOS couldn’t save this phone.");
-    status.textContent="LifeOS will nudge you when a task is actually worth your attention.";
-    status.className="ok";$("#notifyTitle").textContent="Phone reminders are on 🔔";btn.textContent="Test";btn.onclick=testNotification;
+    if(!swAvailable||!pushAvailable||permission==="unsupported"){
+      throw new Error("This Home Screen app does not currently have iPhone push support.");
+    }
+    if(permission==="denied"){
+      throw new Error("iPhone has blocked LifeOS notifications. Check Settings → Notifications → LifeOS.");
+    }
+    const configResponse=await fetch("/api/push/config",{cache:"no-store"});
+    if(!configResponse.ok)throw new Error("LifeOS notification server returned "+configResponse.status+".");
+    const config=await configResponse.json();
+    if(!config.publicKey)throw new Error("LifeOS is missing its notification key.");
+    const registration=await navigator.serviceWorker.register("/sw.js?v=2",{updateViaCache:"none"});
+    await navigator.serviceWorker.ready;
+    let current=await registration.pushManager.getSubscription();
+    if(!current){
+      if(permission==="default")permission=await Notification.requestPermission();
+      if(permission!=="granted")throw new Error("iPhone did not grant notification permission.");
+      current=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64urlToUint8Array(config.publicKey)});
+    }
+    const response=await fetch("/api/push/subscribe",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,subscription:current.toJSON()})});
+    if(!response.ok){
+      const data=await response.json().catch(()=>({}));
+      throw new Error(data.error||"LifeOS could not save this phone.");
+    }
+    status.textContent="Phone reminders are on 🔔";status.className="ok";
+    $("#notifyTitle").textContent="Phone reminders are on 🔔";btn.textContent="Test";btn.onclick=testNotification;
   }catch(error){
-    console.error("LifeOS notifications:",error);
-    status.textContent="Couldn’t enable reminders: "+(error?.message||"unknown error");
-    status.className="warn";
+    console.error("LifeOS notification diagnostic",{standalone,permission,pushAvailable,swAvailable,error});
+    status.textContent=error?.message||"Couldn’t enable reminders.";status.className="warn";
   }finally{btn.disabled=false}
 }
 async function testNotification(){
