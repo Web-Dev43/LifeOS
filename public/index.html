@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b0b0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.webmanifest">
   <title>LifeOS • Deadline</title>
   <style>
     :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f7f7f8;background:#0b0b0f}
@@ -20,7 +23,9 @@
     .info{min-width:0;flex:1}.title{font-weight:750;overflow-wrap:anywhere}.doneText{text-decoration:line-through;color:#777784}
     .meta{font-size:12px;color:#92929f;margin-top:4px}.high{color:#ff8b8b}.medium{color:#f4ca72}.low{color:#80d8a3}
     .delete{width:auto;padding:7px 9px;background:transparent;color:#888;border:1px solid #30303a}.empty{text-align:center;color:#8f8f9c;padding:30px 10px}
-    @media(max-width:520px){h1{font-size:36px}.row{grid-template-columns:1fr}}
+    .notify{display:flex;align-items:center;justify-content:space-between;gap:12px}.notify-copy{min-width:0}.notify-copy b{display:block}.notify-copy span{color:#9696a2;font-size:12px}
+    .notify button{width:auto;white-space:nowrap}.ok{color:#80d8a3}.warn{color:#f4ca72}
+    @media(max-width:520px){h1{font-size:36px}.row{grid-template-columns:1fr}.notify{align-items:flex-start;flex-direction:column}.notify button{width:100%}}
   </style>
 </head>
 <body>
@@ -33,6 +38,14 @@
     <div class="stat"><b id="total">0</b><span>Total</span></div>
     <div class="stat"><b id="open">0</b><span>Open</span></div>
     <div class="stat"><b id="done">0</b><span>Done</span></div>
+  </section>
+
+  <section class="card notify">
+    <div class="notify-copy">
+      <b id="notifyTitle">Phone reminders</b>
+      <span id="notifyStatus">Get nudges for due-today, due-tomorrow, and overdue work.</span>
+    </div>
+    <button id="notifyBtn" onclick="enableNotifications()">Turn on</button>
   </section>
 
   <section class="card">
@@ -57,10 +70,17 @@
 <script>
 const $=s=>document.querySelector(s), form=$("#form"), list=$("#tasks");
 const today=()=>new Date().toISOString().slice(0,10);
+const getDeviceId=()=>{
+  let id=localStorage.getItem("lifeos_device_id");
+  if(!id){id=crypto.randomUUID();localStorage.setItem("lifeos_device_id",id)}
+  return id;
+};
+const deviceId=getDeviceId();
 $("#date").value=today();
 
 async function load(){
-  const r=await fetch("/api/tasks"), data=await r.json();
+  const r=await fetch("/api/tasks?deviceId="+encodeURIComponent(deviceId));
+  const data=await r.json();
   render(data.tasks||[]);
 }
 function render(tasks){
@@ -82,13 +102,59 @@ function render(tasks){
   }).join("");
 }
 function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+
+async function enableNotifications(){
+  if(!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)){
+    $("#notifyStatus").textContent="This browser does not support LifeOS push yet.";
+    $("#notifyStatus").className="warn"; return;
+  }
+  $("#notifyBtn").disabled=true;
+  try{
+    const config=await fetch("/api/push/config").then(r=>r.json());
+    const registration=await navigator.serviceWorker.register("/sw.js");
+    const permission=await Notification.requestPermission();
+    if(permission!=="granted"){
+      $("#notifyStatus").textContent="Notifications are off. You can enable them in your device settings.";
+      $("#notifyStatus").className="warn"; return;
+    }
+    const existing=await registration.pushManager.getSubscription();
+    const subscription=existing || await registration.pushManager.subscribe({
+      userVisibleOnly:true,
+      applicationServerKey:base64urlToUint8Array(config.publicKey)
+    });
+    await fetch("/api/push/subscribe",{
+      method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},
+      body:JSON.stringify({deviceId,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,subscription:subscription.toJSON()})
+    });
+    $("#notifyTitle").textContent="Phone reminders are on 🔔";
+    $("#notifyStatus").textContent="LifeOS will nudge you when a task is actually worth your attention.";
+    $("#notifyStatus").className="ok";
+    $("#notifyBtn").textContent="Test";
+    $("#notifyBtn").onclick=testNotification;
+  }catch(error){
+    console.error(error);
+    $("#notifyStatus").textContent="Couldn’t enable notifications yet. Try again after installing LifeOS to your Home Screen.";
+    $("#notifyStatus").className="warn";
+  }finally{$("#notifyBtn").disabled=false}
+}
+async function testNotification(){
+  $("#notifyBtn").disabled=true;
+  await fetch("/api/push/test",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId})});
+  $("#notifyBtn").disabled=false;
+}
+function base64urlToUint8Array(base64url){
+  const padding="=".repeat((4-base64url.length%4)%4);
+  const base64=(base64url+padding).replace(/-/g,"+").replace(/_/g,"/");
+  return Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+}
 form.onsubmit=async e=>{
   e.preventDefault();
-  await fetch("/api/tasks",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:$("#title").value,dueDate:$("#date").value,priority:$("#priority").value})});
+  await fetch("/api/tasks",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,title:$("#title").value,dueDate:$("#date").value,priority:$("#priority").value})});
   form.reset(); $("#date").value=today(); $("#priority").value="medium"; await load();
 };
-async function toggle(id,completed){await fetch("/api/tasks/"+id,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({completed})});load()}
-async function removeTask(id){await fetch("/api/tasks/"+id,{method:"DELETE"});load()}
+async function toggle(id,completed){await fetch("/api/tasks/"+id,{method:"PATCH",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({completed,deviceId})});load()}
+async function removeTask(id){await fetch("/api/tasks/"+id,{method:"DELETE",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId})});load()}
+if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
 load();
 </script>
 </body>
