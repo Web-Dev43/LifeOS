@@ -84,6 +84,7 @@
   }catch(e){console.warn("LifeOS update check failed",e)}
 })();
 </script>
+<script>
 const $=s=>document.querySelector(s), form=$("#form"), list=$("#tasks");
 const today=()=>new Date().toISOString().slice(0,10);
 const getDeviceId=()=>{
