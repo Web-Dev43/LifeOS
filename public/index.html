@@ -168,7 +168,7 @@ window.openLifeOSHome=function(){
 <script>
 (async function(){
   try{
-    const version="2026-10-06-16";
+    const version="2026-10-06-17";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -223,56 +223,90 @@ function analyzeDeclutter(files){
   const now=Date.now();
   const list=Array.from(files||[]).map((f,index)=>({
     id:index,
-    name:String(f?.name||"Untitled item"),
-    size:Number.isFinite(Number(f?.size))?Number(f.size):0,
-    type:String(f?.type||""),
-    lastModified:Number.isFinite(Number(f?.lastModified))?Number(f.lastModified):now
+    name:String(f&&f.name||"Untitled item"),
+    size:Number(f&&f.size)||0,
+    type:String(f&&f.type||""),
+    lastModified:Number(f&&f.lastModified)||now
   }));
+
   const seen=new Map();
-  for(const item of list){
+  list.forEach(item=>{
     const key=item.name.toLowerCase()+"|"+item.size;
     const arr=seen.get(key)||[];
     arr.push(item);
     seen.set(key,arr);
-  }
-  const important=/resume|cv|tax|passport|license|licence|medical|school|assignment|homework|project|contract|receipt|invoice|certificate|id\\b|important|final|portfolio|application|transcript|insurance|lease|rent|bank|budget/i;
-  const junk=/^untitled(?: \\(\\d+\\))?|^document(?: \\(\\d+\\))?|^file(?: \\(\\d+\\))?|^image(?: \\(\\d+\\))?|^copy(?: \\(\\d+\\))?|^download(?: \\(\\d+\\))?|^img[_ -]?\\d+|^dsc[_ -]?\\d+|^vid[_ -]?\\d+/i;
-  for(const item of list){
-    try{
-      const name=item.name.toLowerCase();
-      const ageDays=Math.max(0,Math.floor((now-item.lastModified)/86400000));
-      const duplicateGroup=seen.get(name+"|"+item.size)||[];
-      const isDuplicate=duplicateGroup.length>1;
-      const newest=isDuplicate && item.lastModified===duplicateGroup.reduce((latest,x)=>Math.max(latest,x.lastModified),0);
-      const screenshot=/screenshot|screen.?shot|screen recording/i.test(name);
-      const temp=/\\.tmp$|\\.temp$|^~|\\.crdownload$|\\.part$|\\.download$/i.test(name);
-      const oldDownload=/download|downloads/i.test(name)&&ageDays>60;
-      const veryOld=ageDays>730;
-      const old=ageDays>365;
-      const huge=item.size>500*1024*1024;
-      const large=item.size>100*1024*1024;
-      const media=/^(image|video|audio)\\//i.test(item.type);
-      const archive=/\\.(zip|rar|7z|dmg|pkg|exe|msi)$/i.test(name);
-      let bucket="review",reason="LifeOS isn't sure. Give this one a quick look.";
-      if(temp){bucket="delete";reason="Looks like a temporary or incomplete file.";}
-      else if(isDuplicate&&!newest){bucket="delete";reason="Older duplicate of another selected file with the same name and size.";}
-      else if(isDuplicate&&newest){bucket="keep";reason="Newest copy of a duplicate group.";}
-      else if(screenshot&&ageDays>30){bucket="review";reason="Older screenshot that may no longer be useful.";}
-      else if(oldDownload){bucket="review";reason="Old download. You may not need it anymore.";}
-      else if(junk.test(name)){bucket="review";reason="Generic or camera-generated name. Worth checking.";}
-      else if(archive&&ageDays>180){bucket="review";reason="Old installer/archive that may be taking up space.";}
-      else if(huge&&ageDays>90){bucket="review";reason="Very large file that hasn't been touched recently.";}
-      else if(large&&old){bucket="review";reason="Large file that hasn't been touched in over a year.";}
-      else if(veryOld&&!important.test(name)){bucket="review";reason="More than 2 years old without an obvious important name.";}
-      else if(old&&media&&!important.test(name)){bucket="review";reason="Older photo, video, or audio file worth reviewing.";}
-      else if(important.test(name)){bucket="keep";reason="The name suggests this could be important.";}
-      else if(ageDays<=30){bucket="keep";reason="Recently modified. Probably still relevant.";}
-      groups[bucket].push({file:item,reason});
-    }catch(error){
-      console.warn("DigitalDeclutter skipped one item",item?.name,error);
-      groups.review.push({file:item,reason:"LifeOS couldn't confidently classify this item, so it needs a quick look."});
+  });
+
+  const importantWords=["resume","cv","tax","passport","license","licence","medical","school","assignment","homework","project","contract","receipt","invoice","certificate","important","final","portfolio","application","transcript","insurance","lease","rent","bank","budget"];
+  const junkPatterns=[
+    /^untitled(?: \(\d+\))?/i,
+    /^document(?: \(\d+\))?/i,
+    /^file(?: \(\d+\))?/i,
+    /^image(?: \(\d+\))?/i,
+    /^copy(?: \(\d+\))?/i,
+    /^download(?: \(\d+\))?/i,
+    /^img[_ -]?\d+/i,
+    /^dsc[_ -]?\d+/i,
+    /^vid[_ -]?\d+/i
+  ];
+
+  list.forEach(item=>{
+    const name=item.name.toLowerCase();
+    const ageDays=Math.max(0,Math.floor((now-item.lastModified)/86400000));
+    const duplicateGroup=seen.get(name+"|"+item.size)||[];
+    const isDuplicate=duplicateGroup.length>1;
+    const newest=isDuplicate && item.lastModified===duplicateGroup.reduce((latest,x)=>Math.max(latest,x.lastModified),0);
+    const isImportant=importantWords.some(word=>name.includes(word));
+    const isJunkName=junkPatterns.some(pattern=>pattern.test(name));
+    const screenshot=/screenshot|screen.?shot|screen recording/i.test(name);
+    const temp=/\.tmp$|\.temp$|^~|\.crdownload$|\.part$|\.download$/i.test(name);
+    const oldDownload=/download|downloads/i.test(name)&&ageDays>60;
+    const veryOld=ageDays>730;
+    const old=ageDays>365;
+    const huge=item.size>500*1024*1024;
+    const large=item.size>100*1024*1024;
+    const media=/^(image|video|audio)\//i.test(item.type);
+    const archive=/\.(zip|rar|7z|dmg|pkg|exe|msi)$/i.test(name);
+
+    let bucket="review";
+    let reason="LifeOS isn't sure. Give this one a quick look.";
+
+    if(temp){
+      bucket="delete";
+      reason="Looks like a temporary or incomplete file.";
+    }else if(isDuplicate&&!newest){
+      bucket="delete";
+      reason="Older duplicate of another selected file with the same name and size.";
+    }else if(isDuplicate&&newest){
+      bucket="keep";
+      reason="Newest copy of a duplicate group.";
+    }else if(screenshot&&ageDays>30){
+      reason="Older screenshot that may no longer be useful.";
+    }else if(oldDownload){
+      reason="Old download. You may not need it anymore.";
+    }else if(isJunkName){
+      reason="Generic or camera-generated name. Worth checking.";
+    }else if(archive&&ageDays>180){
+      reason="Old installer/archive that may be taking up space.";
+    }else if(huge&&ageDays>90){
+      reason="Very large file that hasn't been touched recently.";
+    }else if(large&&old){
+      reason="Large file that hasn't been touched in over a year.";
+    }else if(veryOld&&!isImportant){
+      reason="More than 2 years old without an obvious important name.";
+    }else if(old&&media&&!isImportant){
+      reason="Older photo, video, or audio file worth reviewing.";
+    }else if(isImportant){
+      bucket="keep";
+      reason="The name suggests this could be important.";
+    }else if(ageDays<=30){
+      bucket="keep";
+      reason="Recently modified. Probably still relevant.";
     }
-  }
+
+    groups[bucket].push({file:item,reason});
+  });
+
   renderDeclutter(groups);
 }
 function renderDeclutter(groups){
