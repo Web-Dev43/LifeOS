@@ -85,112 +85,107 @@
 })();
 </script>
 <script>
-const $=s=>document.querySelector(s), form=$("#form"), list=$("#tasks");
-const today=()=>new Date().toISOString().slice(0,10);
-const getDeviceId=()=>{
-  let id=localStorage.getItem("lifeos_device_id");
-  if(!id){id=crypto.randomUUID();localStorage.setItem("lifeos_device_id",id)}
+
+const $ = (s) => document.querySelector(s);
+const deviceId = (() => {
+  let id = localStorage.getItem("lifeos_device_id");
+  if (!id) { id = crypto.randomUUID(); localStorage.setItem("lifeos_device_id", id); }
   return id;
+})();
+const today = () => new Date().toISOString().slice(0,10);
+const escapeHtml = (s) => String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
+const base64urlToUint8Array = (v) => {
+  const padding = "=".repeat((4 - v.length % 4) % 4);
+  const b = (v + padding).replaceAll("-","+").replaceAll("_","/");
+  return Uint8Array.from(atob(b), c => c.charCodeAt(0));
 };
-const deviceId=getDeviceId();
-$("#date").value=today();
 
 async function load(){
-  const r=await fetch("/api/tasks?deviceId="+encodeURIComponent(deviceId));
-  const data=await r.json();
-  render(data.tasks||[]);
+  try {
+    const r = await fetch("/api/tasks?deviceId=" + encodeURIComponent(deviceId), {cache:"no-store"});
+    const data = await r.json();
+    render(data.tasks || []);
+  } catch(e) { console.error(e); }
 }
 function render(tasks){
-  $("#total").textContent=tasks.length;
-  $("#open").textContent=tasks.filter(t=>!t.completed).length;
-  $("#done").textContent=tasks.filter(t=>t.completed).length;
-  if(!tasks.length){list.innerHTML='<div class="empty">No tasks yet. Add your first one 👀</div>';return}
-  list.innerHTML=tasks.map(t=>{
-    const d=new Date(t.due_date+"T23:59:59");
-    const overdue=!t.completed && d<new Date();
-    return `<div class="task">
-      <button class="check ${t.completed?'done':''}" onclick="toggle(${t.id},${!t.completed})">${t.completed?'✓':''}</button>
-      <div class="info">
-        <div class="title ${t.completed?'doneText':''}">${escapeHtml(t.title)}</div>
-        <div class="meta ${t.priority}">${t.priority.toUpperCase()} · Due ${escapeHtml(t.due_date)}${overdue?' · OVERDUE':''}</div>
-      </div>
-      <select class="prioritySelect ${t.priority}" aria-label="Priority" onchange="changePriority(${t.id},this.value)">
-        <option value="smart" ${t.priority_auto?'selected':''}>Smart</option>
-        <option value="high" ${!t.priority_auto&&t.priority==='high'?'selected':''}>High</option>
-        <option value="medium" ${!t.priority_auto&&t.priority==='medium'?'selected':''}>Medium</option>
-        <option value="low" ${!t.priority_auto&&t.priority==='low'?'selected':''}>Low</option>
-      </select>
-      <button class="delete" onclick="removeTask(${t.id})">×</button>
-    </div>`
+  $("#total").textContent = tasks.length;
+  $("#open").textContent = tasks.filter(t => !t.completed).length;
+  $("#done").textContent = tasks.filter(t => t.completed).length;
+  if (!tasks.length) { $("#tasks").innerHTML = '<div class="empty">No tasks yet. Add your first one 👀</div>'; return; }
+  $("#tasks").innerHTML = tasks.map(t => {
+    const d = new Date(t.due_date + "T23:59:59");
+    const overdue = !t.completed && d < new Date();
+    return '<div class="task">' +
+      '<button class="check '+(t.completed?'done':'')+'" data-action="toggle" data-id="'+t.id+'">'+(t.completed?'✓':'')+'</button>' +
+      '<div class="info"><div class="title '+(t.completed?'doneText':'')+'">'+escapeHtml(t.title)+'</div>' +
+      '<div class="meta '+t.priority+'">'+t.priority.toUpperCase()+' · Due '+escapeHtml(t.due_date)+(overdue?' · OVERDUE':'')+'</div></div>' +
+      '<select class="prioritySelect '+t.priority+'" data-action="priority" data-id="'+t.id+'">' +
+      '<option value="smart" '+(t.priority_auto?'selected':'')+'>Smart</option>' +
+      '<option value="high" '+(!t.priority_auto&&t.priority==="high"?'selected':'')+'>High</option>' +
+      '<option value="medium" '+(!t.priority_auto&&t.priority==="medium"?'selected':'')+'>Medium</option>' +
+      '<option value="low" '+(!t.priority_auto&&t.priority==="low"?'selected':'')+'>Low</option></select>' +
+      '<button class="delete" data-action="delete" data-id="'+t.id+'">×</button></div>';
   }).join("");
 }
-function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
-
 async function enableNotifications(){
-  const status=$("#notifyStatus"),btn=$("#notifyBtn");
-  const standalone=window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone===true;
-  const permission=("Notification" in window)?Notification.permission:"unsupported";
-  const pushAvailable=("PushManager" in window);
-  const swAvailable=("serviceWorker" in navigator);
-  btn.disabled=true;
-  try{
-    status.textContent="Checking LifeOS on this iPhone…";status.className="";
-    if(!standalone){
-      throw new Error("LifeOS is not running as a Home Screen app. Open the LifeOS icon on your Home Screen, not Safari.");
-    }
-    if(!swAvailable||!pushAvailable||permission==="unsupported"){
-      throw new Error("This Home Screen app does not currently have iPhone push support.");
-    }
-    if(permission==="denied"){
-      throw new Error("iPhone has blocked LifeOS notifications. Check Settings → Notifications → LifeOS.");
-    }
-    const configResponse=await fetch("/api/push/config",{cache:"no-store"});
-    if(!configResponse.ok)throw new Error("LifeOS notification server returned "+configResponse.status+".");
-    const config=await configResponse.json();
-    if(!config.publicKey)throw new Error("LifeOS is missing its notification key.");
-    const registration=await navigator.serviceWorker.register("/sw.js?v=2",{updateViaCache:"none"});
+  const status=$("#notifyStatus"), btn=$("#notifyBtn");
+  btn.disabled=true; status.textContent="Checking LifeOS on this iPhone…"; status.className="";
+  try {
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    if (!standalone) throw new Error("Open LifeOS from its Home Screen icon, not Safari.");
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) throw new Error("iPhone push is not available in this app.");
+    if (Notification.permission === "denied") throw new Error("Notifications are blocked. Check Settings → Notifications → LifeOS.");
+    const cr = await fetch("/api/push/config",{cache:"no-store"});
+    if (!cr.ok) throw new Error("Notification server error: "+cr.status);
+    const config = await cr.json();
+    const reg = await navigator.serviceWorker.register("/sw.js?v=3",{updateViaCache:"none"});
     await navigator.serviceWorker.ready;
-    let current=await registration.pushManager.getSubscription();
-    if(!current){
-      if(permission==="default")permission=await Notification.requestPermission();
-      if(permission!=="granted")throw new Error("iPhone did not grant notification permission.");
-      current=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64urlToUint8Array(config.publicKey)});
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
+      if (permission !== "granted") throw new Error("iPhone did not grant notification permission.");
+      sub = await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64urlToUint8Array(config.publicKey)});
     }
-    const response=await fetch("/api/push/subscribe",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,subscription:current.toJSON()})});
-    if(!response.ok){
-      const data=await response.json().catch(()=>({}));
-      throw new Error(data.error||"LifeOS could not save this phone.");
-    }
-    status.textContent="Phone reminders are on 🔔";status.className="ok";
-    $("#notifyTitle").textContent="Phone reminders are on 🔔";btn.textContent="Test";btn.onclick=testNotification;
-  }catch(error){
-    console.error("LifeOS notification diagnostic",{standalone,permission,pushAvailable,swAvailable,error});
-    status.textContent=error?.message||"Couldn’t enable reminders.";status.className="warn";
-  }finally{btn.disabled=false}
+    const sr = await fetch("/api/push/subscribe",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,subscription:sub.toJSON()})});
+    if (!sr.ok) { const d=await sr.json().catch(()=>({})); throw new Error(d.error || "LifeOS could not save this phone."); }
+    status.textContent="Phone reminders are on 🔔"; status.className="ok"; $("#notifyTitle").textContent="Phone reminders are on 🔔"; btn.textContent="Test"; btn.onclick=testNotification;
+  } catch(e) { console.error(e); status.textContent=e.message || "Couldn’t enable reminders."; status.className="warn"; }
+  finally { btn.disabled=false; }
 }
 async function testNotification(){
-  $("#notifyBtn").disabled=true;
+  const btn=$("#notifyBtn"); btn.disabled=true;
   await fetch("/api/push/test",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId})});
-  $("#notifyBtn").disabled=false;
+  btn.disabled=false;
 }
-function base64urlToUint8Array(base64url){
-  const padding="=".repeat((4-base64url.length%4)%4);
-  const base64=(base64url+padding).replace(/-/g,"+").replace(/_/g,"/");
-  return Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+async function loadPlan(){
+  try {
+    const r=await fetch("/api/plan?deviceId="+encodeURIComponent(deviceId),{cache:"no-store"}), d=await r.json(), items=d.items||[];
+    $("#planSummary").textContent=items.length ? d.totalMinutes+" min of focused work. Here’s the order LifeOS recommends." : "Nothing urgent. You’re caught up 🎉";
+    $("#planTitle").textContent=items.length ? "Your next moves" : "You’re clear";
+    $("#plan").innerHTML=items.length ? items.map((t,i)=>'<div class="planItem"><div class="planNum">'+(i+1)+'</div><div class="planInfo"><div class="planTitle">'+escapeHtml(t.title)+'</div><div class="planMeta">'+t.minutes+' min · '+escapeHtml(t.due_date)+' · '+escapeHtml(t.priority.toUpperCase())+'</div><div class="planReason">'+escapeHtml(t.reason)+'</div></div></div>').join("") : '<div class="planEmpty">No open tasks. Go enjoy the fact that your life is currently not on fire. 🔥</div>';
+  } catch(e) { $("#planSummary").textContent="Couldn’t load the plan yet."; }
 }
-form.onsubmit=async e=>{
+async function patchTask(id, body){ await fetch("/api/tasks/"+id,{method:"PATCH",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({...body,deviceId})}); await load(); await loadPlan(); }
+$("#date").value=today();
+$("#notifyBtn").addEventListener("click",enableNotifications);
+$("#form").addEventListener("submit",async e=>{
   e.preventDefault();
   await fetch("/api/tasks",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,title:$("#title").value,dueDate:$("#date").value})});
-  form.reset(); $("#date").value=today(); await load();
-};
-async function loadPlan(){try{const r=await fetch("/api/plan?deviceId="+encodeURIComponent(deviceId));const data=await r.json();const items=data.items||[];$("#planSummary").textContent=items.length?data.totalMinutes+" min of focused work. Here’s the order LifeOS recommends.":"Nothing urgent. You’re caught up 🎉";$("#planTitle").textContent=items.length?"Your next moves":"You’re clear";$("#plan").innerHTML=items.length?items.map((t,i)=>"<div class=\"planItem\"><div class=\"planNum\">"+(i+1)+"</div><div class=\"planInfo\"><div class=\"planTitle\">"+escapeHtml(t.title)+"</div><div class=\"planMeta\">"+t.minutes+" min · "+escapeHtml(t.due_date)+" · "+escapeHtml(t.priority.toUpperCase())+"</div><div class=\"planReason\">"+escapeHtml(t.reason)+"</div></div></div>").join(""):"<div class=\"planEmpty\">No open tasks. Go enjoy the fact that your life is currently not on fire. 🔥</div>"}catch(e){$("#planSummary").textContent="Couldn’t load the plan yet."}}\nasync function changePriority(id,value){
-  await fetch("/api/tasks/"+id,{method:"PATCH",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId,priority:value==="smart"?null:value,priorityAuto:value==="smart"})});
-  load();
-}
-async function toggle(id,completed){await fetch("/api/tasks/"+id,{method:"PATCH",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({completed,deviceId})});load()}
-async function removeTask(id){await fetch("/api/tasks/"+id,{method:"DELETE",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId})});load()}
-if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
-load();
+  $("#form").reset(); $("#date").value=today(); await load(); await loadPlan();
+});
+$("#tasks").addEventListener("click",async e=>{
+  const el=e.target.closest("[data-action]"); if(!el)return;
+  const id=el.dataset.id, action=el.dataset.action;
+  if(action==="toggle") await patchTask(id,{completed:el.classList.contains("done")?0:1});
+  if(action==="delete"){await fetch("/api/tasks/"+id,{method:"DELETE",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({deviceId})});await load();await loadPlan();}
+});
+$("#tasks").addEventListener("change",async e=>{
+  const el=e.target.closest('[data-action="priority"]'); if(!el)return;
+  await patchTask(el.dataset.id,{priority:el.value==="smart"?null:el.value,priorityAuto:el.value==="smart"});
+});
+if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js?v=3",{updateViaCache:"none"}).catch(console.error);
+load(); loadPlan();
+
 </script>
 </body>
 </html>
