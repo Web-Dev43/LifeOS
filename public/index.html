@@ -180,7 +180,7 @@ window.openLifeOSHome=function(){
 <script>
 (async function(){
   try{
-    const version="2026-10-07-01";
+    const version="2026-10-07-02";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -226,7 +226,7 @@ function handleDeclutterFiles(files){
     try{analyzeDeclutter(list);}
     catch(error){
       console.error("DigitalDeclutter analysis failed",error);
-      showDeclutterMessage("Couldn't analyze those files","LifeOS hit an error while checking the selection. Try choosing the files again.");
+      showDeclutterMessage("Couldn't analyze those files",String(error&&error.message||error||"Unknown error"));
     }
   });
 }
@@ -641,7 +641,7 @@ load(); loadPlan(); restoreNotificationState(); window.addEventListener("pagesho
         }catch(error){
           console.error("DigitalDeclutter failed",error);
           if(title)title.textContent="Couldn't analyze those files";
-          if(summary)summary.textContent="LifeOS hit an error while checking the selection. Try choosing the files again.";
+          if(summary)summary.textContent=String(error&&error.message||error||"Unknown error");
           if(groups)groups.innerHTML='<div class="meta warn" style="padding:14px 0">Something went wrong while reading the selected files.</div>';
         }
       },0);
