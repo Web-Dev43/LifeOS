@@ -180,7 +180,7 @@ window.openLifeOSHome=function(){
 <script>
 (async function(){
   try{
-    const version="2026-10-07-02";
+    const version="2026-10-07-03";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -699,6 +699,59 @@ load(); loadPlan(); restoreNotificationState(); window.addEventListener("pagesho
       if(status){status.textContent=error.message||"Couldn't send the test notification.";status.className="warn"}
     }finally{if(btn)btn.disabled=false}
   };
+
+  if(typeof window.handleDeclutterFiles!=="function"){
+    let fallbackState={groups:{delete:[],review:[],keep:[]},selected:new Set()};
+    const esc=s=>String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
+    const bytes=n=>{n=Number(n)||0;if(n<1024)return n+" B";if(n<1048576)return (n/1024).toFixed(1)+" KB";return (n/1048576).toFixed(1)+" MB"};
+    function fallbackRender(groups){
+      const all=[...groups.delete,...groups.review,...groups.keep];
+      fallbackState.groups=groups;
+      const results=byId("declutterResults"),title=byId("declutterTitle"),summary=byId("declutterSummary"),actions=byId("declutterActions"),out=byId("declutterGroups"),cleanup=byId("declutterCleanup");
+      if(results)results.hidden=false;
+      if(title)title.textContent=all.length+" item"+(all.length===1?"":"s")+" checked";
+      if(summary)summary.textContent=groups.delete.length+" delete · "+groups.review.length+" review · "+groups.keep.length+" keep";
+      if(actions)actions.hidden=!all.length;
+      if(cleanup)cleanup.hidden=true;
+      const section=(title,items,icon,key)=>'<div class="declutterGroup"><div class="declutterHead"><h3>'+icon+" "+title+'</h3><div style="display:flex;align-items:center;gap:8px"><span>'+items.length+'</span>'+(items.length&&key!=="keep"?'<button type="button" class="selectGroup" data-select-group="'+key+'">Select all</button>':"")+'</div></div>'+
+        (items.length?items.map(x=>'<label class="declutterItem"><input class="declutterCheck" type="checkbox" data-declutter-id="'+x.file.id+'" '+(fallbackState.selected.has(String(x.file.id))?"checked":"")+'><div class="fileIcon">'+(String(x.file.type||"").startsWith("image/")?"🖼️":"📄")+'</div><div class="fileInfo"><div class="fileName">'+esc(x.file.name)+'</div><div class="fileReason">'+esc(x.reason)+" · "+bytes(x.file.size)+'</div></div></label>").join(""):'<div class="meta" style="padding-top:10px">Nothing here. Nice.</div>')+'</div>';
+      if(out)out.innerHTML=section("Delete",groups.delete,"🗑️","delete")+section("Review",groups.review,"🟡","review")+section("Keep",groups.keep,"⭐","keep");
+    }
+    window.analyzeDeclutter=function(files){
+      const groups={delete:[],review:[],keep:[]},now=Date.now(),seen=new Map();
+      const list=Array.from(files||[]).map((f,i)=>({id:i,name:String(f&&f.name||"Untitled item"),size:Number(f&&f.size)||0,type:String(f&&f.type||""),lastModified:Number(f&&f.lastModified)||now}));
+      list.forEach(x=>{const k=x.name.toLowerCase()+"|"+x.size;const a=seen.get(k)||[];a.push(x);seen.set(k,a)});
+      const important=/resume|cv|tax|passport|license|licence|medical|school|assignment|homework|project|contract|receipt|invoice|certificate|portfolio|application|transcript|insurance|lease|rent|bank|budget|recovery|password|private.?key|secret/i;
+      const memory=/memory|memories|vacation|holiday|trip|travel|birthday|family|friend|friends|wedding|graduation|christmas|thanksgiving|baby|kids|child|dog|cat|pet|beach|sunset|concert|party|celebration|reunion|anniversary|favorite|favourite/i;
+      const ai=/\b(ai|a\.i\.)\b|generated|generation|midjourney|dall[- ]?e|stable ?diffusion|flux|comfyui|leonardo|ideogram|firefly|synthetic|prompt/i;
+      const code=/\.(js|jsx|ts|tsx|py|java|c|cpp|h|hpp|cs|go|rs|rb|php|swift|kt|kts|sh|bash|zsh|sql|html|css|scss|json|xml|yaml|yml|toml|md|ipynb)$/i;
+      const temp=/\.tmp$|\.temp$|^~|\.crdownload$|\.part$|\.download$/i;
+      const screenshot=/screenshot|screen.?shot|screen recording/i;
+      const archive=/\.(zip|rar|7z|dmg|pkg|exe|msi)$/i;
+      const photo=/\.(jpe?g|png|heic|heif|gif|webp)$/i, video=/\.(mov|mp4|m4v|avi|webm)$/i;
+      list.forEach(x=>{
+        const n=x.name.toLowerCase(),a=seen.get(n+"|"+x.size)||[],dup=a.length>1,newest=dup&&x.lastModified===Math.max(...a.map(y=>y.lastModified));
+        if(temp.test(n)){groups.delete.push({file:x,reason:"Temporary or incomplete file."});return}
+        if(dup&&!newest){groups.delete.push({file:x,reason:"Exact duplicate."});return}
+        const media=/^image\//i.test(x.type)||/^video\//i.test(x.type)||/^audio\//i.test(x.type)||photo.test(n)||video.test(n);
+        if(media){if(memory.test(n))groups.keep.push({file:x,reason:"Filename suggests a personal memory."});else if(ai.test(n))groups.review.push({file:x,reason:"Looks like AI-generated media."});else if(screenshot.test(n))groups.review.push({file:x,reason:"Screenshot. Review before removing."});else groups.review.push({file:x,reason:"Personal media. Review before removing."});return}
+        if(important.test(n)&&/recovery|password|private.?key|secret|passport|medical|tax|bank/i.test(n)){groups.keep.push({file:x,reason:"Potentially sensitive or important data."});return}
+        if(archive.test(n)){groups.review.push({file:x,reason:"Archive file. Review before removing."});return}
+        if(code.test(n)){groups.review.push({file:x,reason:"Code/config file. Review whether the project is still active."});return}
+        if(important.test(n)){groups.keep.push({file:x,reason:"Looks important based on the filename."});return}
+        groups.review.push({file:x,reason:"Not enough evidence to safely delete automatically."});
+      });
+      fallbackRender(groups);
+    };
+    window.handleDeclutterFiles=function(files){
+      const list=Array.from(files||[]);
+      if(!list.length){const t=byId("declutterTitle"),s=byId("declutterSummary");if(t)t.textContent="No files selected";if(s)s.textContent="LifeOS didn't receive any files.";return}
+      const t=byId("declutterTitle"),s=byId("declutterSummary");
+      if(t)t.textContent="Checking "+list.length+" item"+(list.length===1?"":"s")+"…";
+      if(s)s.textContent="Analyzing your selection locally. Nothing is uploaded.";
+      setTimeout(()=>{try{window.analyzeDeclutter(list)}catch(e){console.error(e);if(t)t.textContent="Couldn't analyze those files";if(s)s.textContent=e.message||String(e)}},0);
+    };
+  }
 
   function bind(){
     bindFilePicker("photoPicker");
