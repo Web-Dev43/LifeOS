@@ -385,8 +385,16 @@ function renderDeclutter(groups){
   };
   $("#declutterGroups").innerHTML=section("Delete","deleteBadge",groups.delete,"🗑️","delete")+section("Review","reviewBadge",groups.review,"🟡","review")+section("Keep","keepBadge",groups.keep,"⭐","keep");
 }
-$("#photoPicker").addEventListener("change",e=>handleDeclutterFiles(e.target.files));
-$("#filePicker").addEventListener("change",e=>handleDeclutterFiles(e.target.files));
+function bindPrimaryDeclutterPicker(id){
+  const input=$(id);
+  if(!input)return;
+  input.dataset.lifeosBound="1";
+  input.addEventListener("change",e=>handleDeclutterFiles(e.target.files));
+}
+bindPrimaryDeclutterPicker("#photoPicker");
+bindPrimaryDeclutterPicker("#filePicker");
+window.handleDeclutterFiles=handleDeclutterFiles;
+window.analyzeDeclutter=analyzeDeclutter;
 function updateCleanupSelection(){
   const selected=[];
   [...declutterState.groups.delete,...declutterState.groups.review,...declutterState.groups.keep].forEach(x=>{
