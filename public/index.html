@@ -180,7 +180,7 @@ window.openLifeOSHome=function(){
 <script>
 (async function(){
   try{
-    const version="2026-10-07-04";
+    const version="2026-10-07-05";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -767,19 +767,115 @@ load(); loadPlan(); restoreNotificationState(); window.addEventListener("pagesho
 </script>
 
 <script>
-window.lifeosPickFiles=function(input){
-  try{
+(function(){
+  const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+  const bytes=n=>{n=Number(n)||0;if(n<1024)return n+" B";if(n<1048576)return (n/1024).toFixed(1)+" KB";if(n<1073741824)return (n/1048576).toFixed(1)+" MB";return (n/1073741824).toFixed(1)+" GB";};
+  const $id=id=>document.getElementById(id);
+  let state={groups:{delete:[],review:[],keep:[]},selected:new Set()};
+
+  function render(groups){
+    state.groups=groups;
+    const all=[...groups.delete,...groups.review,...groups.keep];
+    const results=$id("declutterResults"),title=$id("declutterTitle"),summary=$id("declutterSummary"),actions=$id("declutterActions"),out=$id("declutterGroups");
+    if(results)results.hidden=false;
+    if(title)title.textContent=all.length+" item"+(all.length===1?"":"s")+" checked";
+    if(summary)summary.textContent=groups.delete.length+" delete · "+groups.review.length+" review · "+groups.keep.length+" keep";
+    if(actions)actions.hidden=!all.length;
+    const section=(label,items,icon,key)=>'<div class="declutterGroup"><div class="declutterHead"><h3>'+icon+" "+label+'</h3><div style="display:flex;align-items:center;gap:8px"><span>'+items.length+'</span>'+(items.length&&key!=="keep"?'<button type="button" class="selectGroup" data-select-group="'+key+'">Select all</button>':"")+'</div></div>'+
+      (items.length?items.map(x=>'<label class="declutterItem"><input class="declutterCheck" type="checkbox" data-declutter-id="'+x.file.id+'" '+(state.selected.has(String(x.file.id))?"checked":"")+'><div class="fileIcon">'+(String(x.file.type||"").startsWith("image/")?"🖼️":"📄")+'</div><div class="fileInfo"><div class="fileName">'+esc(x.file.name)+'</div><div class="fileReason">'+esc(x.reason)+" · "+bytes(x.file.size)+'</div></div></label>').join(""):'<div class="meta" style="padding-top:10px">Nothing here. Nice.</div>')+'</div>';
+    if(out)out.innerHTML=section("Delete",groups.delete,"🗑️","delete")+section("Review",groups.review,"🟡","review")+section("Keep",groups.keep,"⭐","keep");
+  }
+
+  function analyze(files){
+    const groups={delete:[],review:[],keep:[]}, list=Array.from(files||[]);
+    const seen=new Map();
+    list.forEach((f,i)=>{
+      const item={id:i,name:String(f&&f.name||"Untitled item"),size:Number(f&&f.size)||0,type:String(f&&f.type||""),lastModified:Number(f&&f.lastModified)||Date.now()};
+      const key=item.name.toLowerCase()+"|"+item.size;
+      const arr=seen.get(key)||[];arr.push(item);seen.set(key,arr);
+    });
+    const important=/resume|cv|tax|passport|license|licence|medical|school|assignment|homework|project|contract|receipt|invoice|certificate|portfolio|application|transcript|insurance|lease|rent|bank|budget|recovery|password|private.?key|secret/i;
+    const memory=/memory|memories|vacation|holiday|trip|travel|birthday|family|friend|friends|wedding|graduation|christmas|thanksgiving|baby|kids|child|dog|cat|pet|beach|sunset|concert|party|celebration|reunion|anniversary|favorite|favourite/i;
+    const ai=/\b(ai|a\.i\.)\b|generated|generation|midjourney|dall[- ]?e|stable ?diffusion|flux|comfyui|leonardo|ideogram|firefly|synthetic|prompt/i;
+    const code=/\.(js|jsx|ts|tsx|py|java|c|cpp|h|hpp|cs|go|rs|rb|php|swift|kt|kts|sh|bash|zsh|sql|html|css|scss|json|xml|yaml|yml|toml|md|ipynb)$/i;
+    const temp=/\.tmp$|\.temp$|^~|\.crdownload$|\.part$|\.download$/i;
+    const screenshot=/screenshot|screen.?shot|screen recording/i;
+    const archive=/\.(zip|rar|7z|dmg|pkg|exe|msi)$/i;
+    const photo=/\.(jpe?g|png|heic|heif|gif|webp)$/i;
+    const video=/\.(mov|mp4|m4v|avi|webm)$/i;
+    list.forEach((f,i)=>{
+      const item={id:i,name:String(f&&f.name||"Untitled item"),size:Number(f&&f.size)||0,type:String(f&&f.type||""),lastModified:Number(f&&f.lastModified)||Date.now()};
+      const n=item.name.toLowerCase(), group=seen.get(n+"|"+item.size)||[];
+      const duplicate=group.length>1, newest=duplicate&&item.lastModified===Math.max.apply(null,group.map(x=>x.lastModified));
+      const media=/^image\//i.test(item.type)||/^video\//i.test(item.type)||/^audio\//i.test(item.type)||photo.test(n)||video.test(n);
+      if(temp.test(n)){groups.delete.push({file:item,reason:"Temporary or incomplete file."});return;}
+      if(duplicate&&!newest){groups.delete.push({file:item,reason:"Exact duplicate."});return;}
+      if(media){
+        if(memory.test(n))groups.keep.push({file:item,reason:"Filename suggests a personal memory."});
+        else if(ai.test(n))groups.review.push({file:item,reason:"Looks like AI-generated media. Review before removing."});
+        else if(screenshot.test(n))groups.review.push({file:item,reason:"Screenshot. Review before removing."});
+        else groups.review.push({file:item,reason:"Personal media. Review before removing."});
+        return;
+      }
+      if(important.test(n)&&/recovery|password|private.?key|secret|passport|medical|tax|bank/i.test(n)){groups.keep.push({file:item,reason:"Potentially sensitive or important data."});return;}
+      if(archive.test(n)){groups.review.push({file:item,reason:"Archive file. Review before removing."});return;}
+      if(code.test(n)){groups.review.push({file:item,reason:"Code/config file. Review whether the project is still active."});return;}
+      if(important.test(n)){groups.keep.push({file:item,reason:"Looks important based on the filename."});return;}
+      groups.review.push({file:item,reason:"Not enough evidence to safely delete automatically."});
+    });
+    state.selected=new Set();
+    render(groups);
+  }
+
+  window.lifeosPickFiles=function(input){
     const files=input&&input.files;
-    if(!files||!files.length)return;
-    const results=document.getElementById("declutterResults"),title=document.getElementById("declutterTitle"),summary=document.getElementById("declutterSummary");
+    const results=$id("declutterResults"),title=$id("declutterTitle"),summary=$id("declutterSummary"),groups=$id("declutterGroups");
+    if(!files||!files.length){if(results)results.hidden=false;if(title)title.textContent="No files selected";if(summary)summary.textContent="LifeOS didn't receive any files.";return;}
     if(results)results.hidden=false;
     if(title)title.textContent="Checking "+files.length+" item"+(files.length===1?"":"s")+"…";
     if(summary)summary.textContent="Analyzing your selection locally. Nothing is uploaded.";
-    const run=typeof window.handleDeclutterFiles==="function"?window.handleDeclutterFiles:window.analyzeDeclutter;
-    if(typeof run!=="function")throw new Error("DigitalDeclutter failed to load. Refresh LifeOS and try again.");
-    setTimeout(function(){try{run(files)}catch(e){console.error(e);if(title)title.textContent="Couldn't analyze those files";if(summary)summary.textContent=e&&e.message?e.message:String(e)}},0);
-  }catch(e){console.error(e);alert("LifeOS couldn't read that selection: "+(e&&e.message?e.message:String(e)));}
-};
+    if(groups)groups.innerHTML='<div class="meta" style="padding:14px 0">Analyzing now…</div>';
+    setTimeout(function(){
+      try{analyze(files);}
+      catch(e){console.error("DigitalDeclutter failed",e);if(title)title.textContent="Couldn't analyze those files";if(summary)summary.textContent="LifeOS hit an error: "+(e&&e.message?e.message:String(e));}
+    },0);
+  };
+
+  window.prepareDeclutterCleanup=function(){
+    const selected=[...state.groups.delete,...state.groups.review,...state.groups.keep].filter(x=>state.selected.has(String(x.file.id)));
+    const box=$id("declutterCleanup"),list=$id("cleanupList"),text=$id("declutterCleanupText");
+    if(!selected.length)return;
+    if(box)box.hidden=false;
+    if(text)text.textContent=selected.length+" item"+(selected.length===1?"":"s")+" selected. Open Files and delete the listed items.";
+    if(list)list.innerHTML=selected.map(x=>"<li>"+esc(x.file.name)+"</li>").join("");
+    if(box)box.scrollIntoView({behavior:"smooth",block:"nearest"});
+  };
+
+  document.addEventListener("change",function(e){
+    const box=e.target.closest&&e.target.closest(".declutterCheck");if(!box)return;
+    const id=String(box.dataset.declutterId);
+    if(box.checked)state.selected.add(id);else state.selected.delete(id);
+    const s=$id("declutterSummary");
+    if(s)s.textContent=state.groups.delete.length+" delete · "+state.groups.review.length+" review · "+state.groups.keep.length+" keep · "+state.selected.size+" selected";
+  });
+  document.addEventListener("click",function(e){
+    const group=e.target.closest&&e.target.closest("[data-select-group]");
+    if(group){
+      const key=group.dataset.selectGroup;(state.groups[key]||[]).forEach(x=>state.selected.add(String(x.file.id)));render(state.groups);
+      const s=$id("declutterSummary");if(s)s.textContent=state.groups.delete.length+" delete · "+state.groups.review.length+" review · "+state.groups.keep.length+" keep · "+state.selected.size+" selected";
+      return;
+    }
+    if(e.target.id==="selectDelete"||e.target.id==="selectReview"){
+      const key=e.target.id==="selectDelete"?"delete":"review";(state.groups[key]||[]).forEach(x=>state.selected.add(String(x.file.id)));render(state.groups);
+      const s=$id("declutterSummary");if(s)s.textContent=state.groups.delete.length+" delete · "+state.groups.review.length+" review · "+state.groups.keep.length+" keep · "+state.selected.size+" selected";
+    }
+    if(e.target.id==="clearSelection"){state.selected.clear();render(state.groups);}
+    if(e.target.id==="clearDeclutter"){
+      const r=$id("declutterResults");if(r)r.hidden=true;
+      state={groups:{delete:[],review:[],keep:[]},selected:new Set()};
+    }
+  });
+})();
 </script>
 </body>
 </html>
