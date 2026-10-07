@@ -125,13 +125,13 @@ window.openLifeOSHome=function(){
           <span>📸</span>
           <b>Choose photos</b>
           <small>Pick screenshots, duplicates, or old photos to review.</small>
-          <input id="photoPicker" type="file" accept="image/*" multiple>
+          <input id="photoPicker" type="file" accept="image/*" multiple onchange="window.lifeosPickFiles(this)">
         </label>
         <label class="pick">
           <span>📁</span>
           <b>Choose files</b>
           <small>Open the iPhone Files picker and choose documents, downloads, or other files.</small>
-          <input id="filePicker" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.csv,.pages,.numbers,.key">
+          <input id="filePicker" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.csv,.pages,.numbers,.key" onchange="window.lifeosPickFiles(this)">
         </label>
       </div>
     </section>
@@ -180,7 +180,7 @@ window.openLifeOSHome=function(){
 <script>
 (async function(){
   try{
-    const version="2026-10-07-03";
+    const version="2026-10-07-04";
     const key="lifeos_app_version";
     if(localStorage.getItem(key)!==version){
       localStorage.setItem(key,version);
@@ -764,6 +764,22 @@ load(); loadPlan(); restoreNotificationState(); window.addEventListener("pagesho
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",bind,{once:true});else bind();
 })();
+</script>
+
+<script>
+window.lifeosPickFiles=function(input){
+  try{
+    const files=input&&input.files;
+    if(!files||!files.length)return;
+    const results=document.getElementById("declutterResults"),title=document.getElementById("declutterTitle"),summary=document.getElementById("declutterSummary");
+    if(results)results.hidden=false;
+    if(title)title.textContent="Checking "+files.length+" item"+(files.length===1?"":"s")+"…";
+    if(summary)summary.textContent="Analyzing your selection locally. Nothing is uploaded.";
+    const run=typeof window.handleDeclutterFiles==="function"?window.handleDeclutterFiles:window.analyzeDeclutter;
+    if(typeof run!=="function")throw new Error("DigitalDeclutter failed to load. Refresh LifeOS and try again.");
+    setTimeout(function(){try{run(files)}catch(e){console.error(e);if(title)title.textContent="Couldn't analyze those files";if(summary)summary.textContent=e&&e.message?e.message:String(e)}},0);
+  }catch(e){console.error(e);alert("LifeOS couldn't read that selection: "+(e&&e.message?e.message:String(e)));}
+};
 </script>
 </body>
 </html>
