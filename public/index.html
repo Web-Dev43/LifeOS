@@ -31,7 +31,7 @@
     .tool{padding:10px 6px;background:transparent;color:#555;border:0;border-radius:11px;font-size:12px;font-weight:800;line-height:1.2}
     .tool.active{background:rgba(255,255,255,.92);color:#171717;box-shadow:0 3px 10px rgba(0,0,0,.08)}.tool:active{transform:scale(.98)}
     .toolView{animation:fadeIn .18s ease}.declutterChoices{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pick{display:flex;flex-direction:column;gap:7px;padding:18px;border:1px solid rgba(0,0,0,.12);border-radius:16px;background:rgba(255,255,255,.72);color:#171717;cursor:pointer}.pick>span{font-size:28px}.pick b{font-size:16px}.pick small{color:#666;line-height:1.35}.pick input{display:none}
-    .declutterGroup{padding:16px 0;border-bottom:1px solid rgba(0,0,0,.1)}.declutterGroup:last-child{border-bottom:0}.declutterHead{display:flex;justify-content:space-between;gap:10px;align-items:center}.declutterHead h3{margin:0;font-size:18px}.declutterHead span{font-size:12px;color:#92929f}.declutterItem{display:flex;gap:10px;padding:11px 0;border-bottom:1px solid rgba(0,0,0,.08)}.declutterItem:last-child{border-bottom:0}.fileIcon{font-size:20px}.fileInfo{min-width:0;flex:1}.fileName{font-weight:700;overflow-wrap:anywhere}.fileReason{font-size:12px;color:#666;margin-top:3px}.deleteBadge{color:#ff8b8b}.reviewBadge{color:#f4ca72}.keepBadge{color:#80d8a3}
+    .declutterGroup{padding:16px 0;border-bottom:1px solid rgba(0,0,0,.1)}.declutterGroup:last-child{border-bottom:0}.declutterHead{display:flex;justify-content:space-between;gap:10px;align-items:center}.declutterHead h3{margin:0;font-size:18px}.declutterHead span{font-size:12px;color:#92929f}.declutterItem{display:flex;gap:10px;padding:11px 0;border-bottom:1px solid rgba(0,0,0,.08)}.declutterItem:last-child{border-bottom:0}.fileIcon{font-size:20px}.fileInfo{min-width:0;flex:1}.fileName{font-weight:700;overflow-wrap:anywhere}.fileReason{font-size:12px;color:#666;margin-top:3px}.deleteBadge{color:#ff8b8b}.reviewBadge{color:#f4ca72}.keepBadge{color:#80d8a3}.declutterActions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px;padding-top:14px;border-top:1px solid rgba(0,0,0,.1)}.bulkBtn{width:auto;padding:10px 12px;border:1px solid rgba(0,0,0,.12);background:rgba(255,255,255,.82);box-shadow:none}.bulkBtn.primary{background:#171717;color:#fff}.declutterHead .selectGroup{width:auto;padding:7px 9px;font-size:11px;box-shadow:none}.declutterItem{align-items:flex-start}.declutterCheck{width:22px;height:22px;margin:1px 0 0;padding:0;flex:none;accent-color:#171717}.declutterCleanup{margin-top:12px;padding:14px;border-radius:14px;background:rgba(255,255,255,.72);border:1px solid rgba(0,0,0,.1)}.declutterCleanup b{display:block;margin-bottom:5px}.declutterCleanup p{margin:0;color:#666;font-size:12px;line-height:1.45}.cleanupList{margin:10px 0 0;padding-left:18px;max-height:180px;overflow:auto;font-size:12px}.cleanupList li{margin:4px 0;overflow-wrap:anywhere}
     @keyframes fadeIn{from{opacity:.5;transform:translateY(3px)}to{opacity:1;transform:none}}
     @media(max-width:520px){.switcher{grid-template-columns:repeat(2,1fr)}.declutterChoices{grid-template-columns:1fr}}
 </style>
@@ -145,7 +145,19 @@ window.openLifeOSHome=function(){
         </div>
         <button class="refresh" id="clearDeclutter">Clear</button>
       </div>
+      <div id="declutterActions" class="declutterActions" hidden>
+        <button type="button" class="bulkBtn primary" id="selectDelete">Select all Delete</button>
+        <button type="button" class="bulkBtn" id="selectReview">Select all Review</button>
+        <button type="button" class="bulkBtn" id="clearSelection">Clear selection</button>
+        <button type="button" class="bulkBtn" id="prepareCleanup" onclick="prepareDeclutterCleanup()">Prepare cleanup</button>
+      </div>
       <div id="declutterGroups"></div>
+      <div id="declutterCleanup" class="declutterCleanup" hidden>
+        <b>Ready for cleanup 🧹</b>
+        <p id="declutterCleanupText">LifeOS prepared your list. iPhone keeps the final Delete button inside Files, so LifeOS will never pretend it deleted something it cannot.</p>
+        <button type="button" class="bulkBtn primary" id="copyCleanup">Copy cleanup list</button>
+        <ol class="cleanupList" id="cleanupList"></ol>
+      </div>
     </section>
 
     <section class="card">
@@ -352,19 +364,83 @@ function analyzeDeclutter(files){
   });
   renderDeclutter(groups);
 }
+let declutterState={groups:{delete:[],review:[],keep:[]},selected:new Set()};
+
 function renderDeclutter(groups){
   const all=[...groups.delete,...groups.review,...groups.keep];
+  declutterState.groups=groups;
+  const validIds=new Set(all.map(x=>String(x.file.id)));
+  declutterState.selected=new Set([...declutterState.selected].filter(id=>validIds.has(id)));
   $("#declutterResults").hidden=false;
   $("#declutterTitle").textContent=all.length+" item"+(all.length===1?"":"s")+" checked";
   $("#declutterSummary").textContent=groups.delete.length+" delete · "+groups.review.length+" review · "+groups.keep.length+" keep";
-  const section=(title,cls,items,icon)=>'<div class="declutterGroup"><div class="declutterHead"><h3>'+icon+" "+title+'</h3><span>'+items.length+'</span></div>'+
-    (items.length?items.map(x=>'<div class="declutterItem"><div class="fileIcon">'+(String(x.file.type||"").startsWith("image/")?"🖼️":"📄")+'</div><div class="fileInfo"><div class="fileName">'+escapeHtml(x.file.name)+'</div><div class="fileReason '+cls+'">'+escapeHtml(x.reason)+" · "+formatBytes(x.file.size)+'</div></div></div>').join(""):'<div class="meta" style="padding-top:10px">Nothing here. Nice.</div>')+'</div>';
-  $("#declutterGroups").innerHTML=section("Delete","deleteBadge",groups.delete,"🗑️")+section("Review","reviewBadge",groups.review,"🟡")+section("Keep","keepBadge",groups.keep,"⭐");
+  $("#declutterActions").hidden=!all.length;
+  $("#declutterCleanup").hidden=true;
+
+  const section=(title,cls,items,icon,key)=>{
+    const selectable=key!=="keep"&&items.length;
+    const selectButton=selectable?'<button type="button" class="selectGroup" data-select-group="'+key+'">Select all</button>':"";
+    return '<div class="declutterGroup"><div class="declutterHead"><h3>'+icon+" "+title+'</h3><div style="display:flex;align-items:center;gap:8px"><span>'+items.length+'</span>'+selectButton+'</div></div>'+
+      (items.length?items.map(x=>'<label class="declutterItem"><input class="declutterCheck" type="checkbox" data-declutter-id="'+x.file.id+'" '+(declutterState.selected.has(String(x.file.id))?"checked":"")+'><div class="fileIcon">'+(String(x.file.type||"").startsWith("image/")?"🖼️":"📄")+'</div><div class="fileInfo"><div class="fileName">'+escapeHtml(x.file.name)+'</div><div class="fileReason '+cls+'">'+escapeHtml(x.reason)+" · "+formatBytes(x.file.size)+'</div></div></label>").join(""):'<div class="meta" style="padding-top:10px">Nothing here. Nice.</div>')+'</div>';
+  };
+  $("#declutterGroups").innerHTML=section("Delete","deleteBadge",groups.delete,"🗑️","delete")+section("Review","reviewBadge",groups.review,"🟡","review")+section("Keep","keepBadge",groups.keep,"⭐","keep");
 }
 $("#photoPicker").addEventListener("change",e=>handleDeclutterFiles(e.target.files));
 $("#filePicker").addEventListener("change",e=>handleDeclutterFiles(e.target.files));
+function updateCleanupSelection(){
+  const selected=[];
+  [...declutterState.groups.delete,...declutterState.groups.review,...declutterState.groups.keep].forEach(x=>{
+    if(declutterState.selected.has(String(x.file.id)))selected.push(x);
+  });
+  $("#declutterSummary").textContent=declutterState.groups.delete.length+" delete · "+declutterState.groups.review.length+" review · "+declutterState.groups.keep.length+" keep · "+selected.length+" selected";
+}
+
+function selectDeclutterGroup(key){
+  (declutterState.groups[key]||[]).forEach(x=>declutterState.selected.add(String(x.file.id)));
+  renderDeclutter(declutterState.groups);
+  updateCleanupSelection();
+}
+
+function prepareDeclutterCleanup(){
+  const selected=[...declutterState.groups.delete,...declutterState.groups.review,...declutterState.groups.keep].filter(x=>declutterState.selected.has(String(x.file.id)));
+  if(!selected.length)return;
+  $("#declutterCleanup").hidden=false;
+  $("#declutterCleanupText").textContent=selected.length+" item"+(selected.length===1?"":"s")+" selected. LifeOS copied nothing yet. Use the button below, then open Files and delete the listed items in one batch.";
+  $("#cleanupList").innerHTML=selected.map(x=>"<li>"+escapeHtml(x.file.name)+"</li>").join("");
+  $("#declutterCleanup").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+$("#declutterGroups").addEventListener("change",e=>{
+  const box=e.target.closest(".declutterCheck"); if(!box)return;
+  const id=String(box.dataset.declutterId);
+  if(box.checked)declutterState.selected.add(id);else declutterState.selected.delete(id);
+  updateCleanupSelection();
+});
+$("#declutterGroups").addEventListener("click",e=>{
+  const btn=e.target.closest("[data-select-group]"); if(!btn)return;
+  selectDeclutterGroup(btn.dataset.selectGroup);
+});
+$("#selectDelete").addEventListener("click",()=>selectDeclutterGroup("delete"));
+$("#selectReview").addEventListener("click",()=>selectDeclutterGroup("review"));
+$("#clearSelection").addEventListener("click",()=>{
+  declutterState.selected.clear();
+  renderDeclutter(declutterState.groups);
+});
+$("#copyCleanup").addEventListener("click",async()=>{
+  const selected=[...declutterState.groups.delete,...declutterState.groups.review,...declutterState.groups.keep].filter(x=>declutterState.selected.has(String(x.file.id)));
+  const text="LifeOS cleanup list\n\n"+selected.map(x=>"• "+x.file.name).join("\n");
+  try{
+    await navigator.clipboard.writeText(text);
+    $("#copyCleanup").textContent="Copied ✓";
+    setTimeout(()=>$("#copyCleanup").textContent="Copy cleanup list",1600);
+  }catch(e){
+    $("#copyCleanup").textContent="Select the list above and copy";
+  }
+});
 $("#clearDeclutter").addEventListener("click",()=>{
   $("#photoPicker").value="";$("#filePicker").value="";$("#declutterResults").hidden=true;$("#declutterGroups").innerHTML="";
+  declutterState={groups:{delete:[],review:[],keep:[]},selected:new Set()};
+  $("#declutterActions").hidden=true;$("#declutterCleanup").hidden=true;
 });
 
 const deviceId = (() => {
